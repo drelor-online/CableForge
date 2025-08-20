@@ -186,6 +186,36 @@ const CableTable: React.FC<CableTableProps> = ({
     onSelectionChange(selectedIds);
   }, [onSelectionChange]);
 
+  // Excel-like keyboard navigation
+  const navigateToNextCell = useCallback((params: any) => {
+    const suggestedNextCell = params.nextCellPosition;
+    
+    // Don't navigate to empty row for non-editing actions
+    if (suggestedNextCell && suggestedNextCell.rowIndex === filteredCables.length - 1) {
+      const cable = filteredCables[suggestedNextCell.rowIndex];
+      if (cable?.id === -1 && !params.editing) {
+        return null; // Stay in current cell
+      }
+    }
+    
+    return suggestedNextCell;
+  }, [filteredCables]);
+
+  const tabToNextCell = useCallback((params: any) => {
+    const suggestedNextCell = params.nextCellPosition;
+    
+    // Handle tab navigation in empty row to create new cable
+    if (suggestedNextCell && suggestedNextCell.rowIndex === filteredCables.length - 1) {
+      const cable = filteredCables[suggestedNextCell.rowIndex];
+      if (cable?.id === -1) {
+        // Allow tabbing to start editing in empty row
+        return suggestedNextCell;
+      }
+    }
+    
+    return suggestedNextCell;
+  }, [filteredCables]);
+
   // Delete handlers
   const handleDeleteCable = useCallback(async (cable: Cable) => {
     const confirmed = await showConfirm({
@@ -265,12 +295,24 @@ const CableTable: React.FC<CableTableProps> = ({
       width: 120,
       pinned: 'left',
       cellClass: (params: any) => {
+        let baseClass = '';
+        
         if (params.data.id === -1 && !params.value) {
-          return 'font-mono font-semibold text-gray-400 italic';
+          baseClass = 'font-mono font-semibold text-gray-400 italic';
+        } else {
+          baseClass = params.data.id === -1 
+            ? 'font-mono font-semibold text-gray-400 italic' 
+            : 'font-mono font-semibold text-blue-600';
         }
-        return params.data.id === -1 
-          ? 'font-mono font-semibold text-gray-400 italic' 
-          : 'font-mono font-semibold text-blue-600';
+        
+        // Add validation styling
+        if (params.data.id !== -1) {
+          if (!params.value || params.value.trim() === '') {
+            baseClass += ' validation-error-cell';
+          }
+        }
+        
+        return baseClass;
       },
       editable: true,
       cellEditor: 'agTextCellEditor',
@@ -470,7 +512,11 @@ const CableTable: React.FC<CableTableProps> = ({
     resizable: true,
     sortable: true,
     filter: true,
+    floatingFilter: true,
     editable: false,
+    enableRowGroup: false,
+    enablePivot: false,
+    enableValue: false,
   };
 
   return (
@@ -491,9 +537,16 @@ const CableTable: React.FC<CableTableProps> = ({
             enableClickSelection: false,
             isRowSelectable: (params) => params.data.id !== -1 // Don't allow selection of empty row
           }}
-          animateRows={true}
+          // Excel-like features (Community version limited)
           enableCellTextSelection={true}
+          suppressCopyRowsToClipboard={false}
+          suppressCopySingleCellRanges={false}
+          // Cell navigation
+          suppressMovableColumns={false}
           ensureDomOrder={true}
+          animateRows={true}
+          navigateToNextCell={navigateToNextCell}
+          tabToNextCell={tabToNextCell}
           getRowId={(params) => params.data.id?.toString() || params.data.tag}
           getRowClass={getRowClass}
           noRowsOverlayComponent={() => (
