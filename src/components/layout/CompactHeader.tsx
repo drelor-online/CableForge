@@ -10,13 +10,15 @@ interface CompactHeaderProps {
     infoCount: number;
   };
   onExport: () => void;
+  onOpenAutoNumbering?: () => void;
 }
 
 const CompactHeader: React.FC<CompactHeaderProps> = ({
   activeTab,
   onTabChange,
   validationCounts,
-  onExport
+  onExport,
+  onOpenAutoNumbering
 }) => {
   // Calculate overall integrity percentage
   const calculateIntegrityPercentage = () => {
@@ -76,6 +78,15 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
 
         {/* Action Buttons */}
         <div className="flex gap-2">
+          {onOpenAutoNumbering && activeTab === 'cables' && (
+            <button
+              onClick={onOpenAutoNumbering}
+              className="px-2 py-1 text-xs font-medium bg-white/10 text-white border border-white/20 rounded hover:bg-white/20 transition-colors"
+              title="Auto-numbering Settings"
+            >
+              ⚙️
+            </button>
+          )}
           <button
             onClick={onExport}
             className="px-3 py-1 text-xs font-medium bg-white/10 text-white border border-white/20 rounded hover:bg-white/20 transition-colors"

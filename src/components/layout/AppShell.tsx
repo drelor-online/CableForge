@@ -35,6 +35,8 @@ interface AppShellProps {
     selectedTo: string;
     selectedRoute: string;
   }) => void;
+  // Auto-numbering settings
+  onOpenAutoNumbering?: () => void;
 }
 
 const AppShell: React.FC<AppShellProps> = ({
@@ -45,7 +47,8 @@ const AppShell: React.FC<AppShellProps> = ({
   currentViewStats,
   projectTotals,
   validationCounts,
-  onFiltersChange
+  onFiltersChange,
+  onOpenAutoNumbering
 }) => {
 
   // Filter state
@@ -94,6 +97,7 @@ const AppShell: React.FC<AppShellProps> = ({
         onTabChange={onTabChange}
         validationCounts={validationCounts}
         onExport={onExport}
+        onOpenAutoNumbering={onOpenAutoNumbering}
       />
       
       {/* Filter Bar - only show on cable tab for now */}

@@ -4,11 +4,13 @@ import CableTable from './components/tables/CableTable';
 import EditCableModal from './components/modals/EditCableModal';
 import BulkEditModal from './components/modals/BulkEditModal';
 import CableLibraryModal from './components/modals/CableLibraryModal';
+import AutoNumberingModal from './components/modals/AutoNumberingModal';
 import { useAppStore } from './stores/useAppStore';
 import { useDatabaseStore } from './stores/useDatabaseStore';
 import { validationService } from './services/validation-service';
 import { useUI } from './contexts/UIContext';
 import { Cable, CableTypeLibrary } from './types';
+import { AutoNumberingSettings } from './types/settings';
 
 function App() {
   const { showSuccess, showError, showInfo } = useUI();
@@ -67,6 +69,7 @@ function App() {
   const [editingCable, setEditingCable] = useState<Cable | null>(null);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
+  const [showAutoNumberingModal, setShowAutoNumberingModal] = useState(false);
 
   // Initialize database on mount
   useEffect(() => {
@@ -261,6 +264,21 @@ function App() {
     setShowBulkEditModal(false);
   }, []);
 
+  const handleOpenAutoNumbering = useCallback(() => {
+    setShowAutoNumberingModal(true);
+  }, []);
+
+  const handleCloseAutoNumbering = useCallback(() => {
+    setShowAutoNumberingModal(false);
+  }, []);
+
+  const handleSaveAutoNumbering = useCallback((settings: AutoNumberingSettings) => {
+    // Settings are automatically saved by the service
+    // Could show a success message here if needed
+    showSuccess('Auto-numbering settings saved successfully!');
+    console.log('Auto-numbering settings saved:', settings);
+  }, [showSuccess]);
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'cables':
@@ -381,6 +399,7 @@ function App() {
         projectTotals={projectTotals}
         validationCounts={validationCounts}
         onFiltersChange={handleFiltersChange}
+        onOpenAutoNumbering={handleOpenAutoNumbering}
       >
         {renderTabContent()}
       </AppShell>
@@ -407,6 +426,12 @@ function App() {
         onClose={handleCloseLibraryModal}
         onAddFromLibrary={handleLibraryAddCable}
         isLoading={isLoading}
+      />
+
+      <AutoNumberingModal
+        isOpen={showAutoNumberingModal}
+        onClose={handleCloseAutoNumbering}
+        onSave={handleSaveAutoNumbering}
       />
     </>
   );

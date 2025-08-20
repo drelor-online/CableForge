@@ -4,6 +4,7 @@ import { ColDef, GridReadyEvent, CellValueChangedEvent, SelectionChangedEvent } 
 import { Cable } from '../../types';
 import { ValidationStatus } from '../../types/validation';
 import { validationService } from '../../services/validation-service';
+import { autoNumberingService } from '../../services/auto-numbering-service';
 import CableTypeBadge from '../ui/CableTypeBadge';
 import StatusIndicator from '../ui/StatusIndicator';
 import ValidationIndicator from '../ui/ValidationIndicator';
@@ -149,10 +150,11 @@ const CableTable: React.FC<CableTableProps> = ({
     if (cable.id === -1) {
       console.log('CableTable: Creating new cable from empty row');
       try {
-        // Get next tag if tag field is empty
+        // Get next tag if tag field is empty or use auto-numbering
         let tag = newValue;
         if (field !== 'tag' || !tag) {
-          tag = await onGetNextTag();
+          // Use auto-numbering service to generate next tag
+          tag = autoNumberingService.getNextTag(cables);
         }
         
         // Create the cable
