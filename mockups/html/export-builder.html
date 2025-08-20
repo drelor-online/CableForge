@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Template Builder - CableForge</title>
+    
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/theme.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/tables.css">
+    
+    <style>
+        .builder-container {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            gap: 1.5rem;
+            height: 70vh;
+        }
+        
+        .field-list, .column-list, .settings-panel {
+            background-color: var(--color-bg-secondary);
+            border: 1px solid var(--color-border-primary);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+            overflow-y: auto;
+        }
+        
+        .field-item, .column-item {
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border-primary);
+            border-radius: var(--radius-base);
+            cursor: move;
+            user-select: none;
+            transition: all var(--transition-fast);
+        }
+        
+        .field-item:hover {
+            background-color: var(--color-bg-hover);
+            border-color: var(--color-border-hover);
+        }
+        
+        .field-item.dragging {
+            opacity: 0.5;
+            transform: rotate(5deg);
+        }
+        
+        .column-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: default;
+        }
+        
+        .column-item.selected {
+            background-color: var(--color-bg-selected);
+            border-color: var(--color-primary);
+        }
+        
+        .column-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+        
+        .drop-zone {
+            min-height: 300px;
+            border: 2px dashed var(--color-border-primary);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-text-tertiary);
+            transition: all var(--transition-fast);
+        }
+        
+        .drop-zone.drag-over {
+            border-color: var(--color-primary);
+            background-color: var(--color-primary-light);
+        }
+        
+        .preview-area {
+            background-color: var(--color-bg-primary);
+            border: 1px solid var(--color-border-primary);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+            margin-top: 1rem;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body style="background-color: var(--color-bg-primary); padding: 2rem;">
+    
+    <div class="modal" style="width: 95vw; max-width: 1400px; margin: 0 auto; max-height: 90vh;">
+        <div class="modal-header">
+            <h3 class="modal-title">Export Template Builder</h3>
+            <button class="modal-close">✕</button>
+        </div>
+        
+        <div class="modal-body">
+            <!-- Template Info -->
+            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                <div class="form-group" style="flex: 1;">
+                    <label class="form-label">Template Name:</label>
+                    <input type="text" class="form-input" value="Client ABC Cable Schedule" placeholder="Enter template name...">
+                </div>
+                
+                <div class="form-group" style="flex: 1;">
+                    <label class="form-label">Description:</label>
+                    <input type="text" class="form-input" value="Standard cable schedule format for Client ABC" placeholder="Template description...">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Load Template:</label>
+                    <select class="form-select">
+                        <option>New Template</option>
+                        <option>Standard Cable Schedule</option>
+                        <option>Client XYZ Format</option>
+                        <option>Instrument Schedule</option>
+                        <option>Combined Cable & Conduit</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Builder Interface -->
+            <div class="builder-container">
+                <!-- Available Fields -->
+                <div>
+                    <h4 style="margin-bottom: 1rem;">Available Fields</h4>
+                    <div class="field-list">
+                        <div class="field-item" draggable="true" data-field="tag">
+                            <strong>Cable Tag</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">tag</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="description">
+                            <strong>Description</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">description</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="function">
+                            <strong>Function</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">function</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="voltage_level">
+                            <strong>Voltage Level</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">voltage_level</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="cable_type">
+                            <strong>Cable Type</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">cable_type</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="size">
+                            <strong>Size</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">size</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="cores">
+                            <strong>Cores</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">cores</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="from_location">
+                            <strong>From Location</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">from_location</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="from_equipment">
+                            <strong>From Equipment</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">from_equipment</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="to_location">
+                            <strong>To Location</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">to_location</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="to_equipment">
+                            <strong>To Equipment</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">to_equipment</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="length">
+                            <strong>Length</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">length</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="calculated_length">
+                            <strong>Calculated Length</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">calculated_length</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="route">
+                            <strong>Route</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">route</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="voltage_drop_percent">
+                            <strong>Voltage Drop %</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">voltage_drop_percent</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="segregation_class">
+                            <strong>Segregation Class</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">segregation_class</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="manufacturer">
+                            <strong>Manufacturer</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">manufacturer</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="part_number">
+                            <strong>Part Number</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">part_number</div>
+                        </div>
+                        <div class="field-item" draggable="true" data-field="notes">
+                            <strong>Notes</strong>
+                            <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">notes</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Export Columns -->
+                <div>
+                    <h4 style="margin-bottom: 1rem;">Export Columns</h4>
+                    <div class="column-list" id="column-list">
+                        <div class="drop-zone" id="drop-zone">
+                            Drag fields here to create export columns
+                        </div>
+                        
+                        <!-- Pre-populated columns for demo -->
+                        <div class="column-item" data-field="tag">
+                            <div>
+                                <strong>Cable Tag</strong>
+                                <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">tag</div>
+                            </div>
+                            <div class="column-actions">
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↑</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↓</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem; color: var(--color-error);">✕</button>
+                            </div>
+                        </div>
+                        
+                        <div class="column-item selected" data-field="description">
+                            <div>
+                                <strong>Description</strong>
+                                <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">description</div>
+                            </div>
+                            <div class="column-actions">
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↑</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↓</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem; color: var(--color-error);">✕</button>
+                            </div>
+                        </div>
+                        
+                        <div class="column-item" data-field="from_equipment">
+                            <div>
+                                <strong>From Equipment</strong>
+                                <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">from_equipment</div>
+                            </div>
+                            <div class="column-actions">
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↑</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↓</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem; color: var(--color-error);">✕</button>
+                            </div>
+                        </div>
+                        
+                        <div class="column-item" data-field="to_equipment">
+                            <div>
+                                <strong>To Equipment</strong>
+                                <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">to_equipment</div>
+                            </div>
+                            <div class="column-actions">
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↑</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↓</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem; color: var(--color-error);">✕</button>
+                            </div>
+                        </div>
+                        
+                        <div class="column-item" data-field="size">
+                            <div>
+                                <strong>Size</strong>
+                                <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">size</div>
+                            </div>
+                            <div class="column-actions">
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↑</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↓</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem; color: var(--color-error);">✕</button>
+                            </div>
+                        </div>
+                        
+                        <div class="column-item" data-field="length">
+                            <div>
+                                <strong>Length (ft)</strong>
+                                <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">length</div>
+                            </div>
+                            <div class="column-actions">
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↑</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem;">↓</button>
+                                <button class="btn btn-sm" style="padding: 0.25rem; color: var(--color-error);">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Column Settings -->
+                <div>
+                    <h4 style="margin-bottom: 1rem;">Column Settings</h4>
+                    <div class="settings-panel">
+                        <div class="form-group">
+                            <label class="form-label">Header Text:</label>
+                            <input type="text" class="form-input" value="Description">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Column Width:</label>
+                            <select class="form-select">
+                                <option>Auto-fit</option>
+                                <option>Fixed - 100px</option>
+                                <option>Fixed - 150px</option>
+                                <option>Fixed - 200px</option>
+                                <option>Fixed - 250px</option>
+                                <option>Custom...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Text Alignment:</label>
+                            <select class="form-select">
+                                <option>Left</option>
+                                <option>Center</option>
+                                <option>Right</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Number Format:</label>
+                            <select class="form-select">
+                                <option>General</option>
+                                <option>Number (0.00)</option>
+                                <option>Currency ($0.00)</option>
+                                <option>Percentage (0.0%)</option>
+                                <option>Custom...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Header Style:</label>
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <input type="checkbox" checked> Bold
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <input type="checkbox"> Italic
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <input type="checkbox" checked> Centered
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Background Color:</label>
+                            <select class="form-select">
+                                <option>None</option>
+                                <option>Light Gray</option>
+                                <option>Blue</option>
+                                <option>Green</option>
+                                <option>Yellow</option>
+                                <option>Custom...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Border Style:</label>
+                            <select class="form-select">
+                                <option>All Borders</option>
+                                <option>Outline Only</option>
+                                <option>Bottom Border</option>
+                                <option>No Borders</option>
+                            </select>
+                        </div>
+                        
+                        <hr style="margin: 1rem 0; border: none; border-top: 1px solid var(--color-border-primary);">
+                        
+                        <h5 style="margin-bottom: 0.5rem;">Export Options</h5>
+                        
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" checked>
+                                Include header row
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox">
+                                Exclude spare cables
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" checked>
+                                Sort by cable tag
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox">
+                                Group by function
+                            </label>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox">
+                                Include summary totals
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Preview -->
+            <div class="preview-area">
+                <h4 style="margin-bottom: 1rem;">Preview</h4>
+                <table class="data-table" style="font-size: var(--text-xs);">
+                    <thead>
+                        <tr style="background-color: var(--color-bg-secondary);">
+                            <th style="font-weight: var(--font-bold); text-align: center;">Cable Tag</th>
+                            <th style="font-weight: var(--font-bold); text-align: center; background-color: var(--color-primary-light);">Description</th>
+                            <th style="font-weight: var(--font-bold); text-align: center;">From Equipment</th>
+                            <th style="font-weight: var(--font-bold); text-align: center;">To Equipment</th>
+                            <th style="font-weight: var(--font-bold); text-align: center;">Size</th>
+                            <th style="font-weight: var(--font-bold); text-align: center;">Length (ft)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>C-001</td>
+                            <td style="background-color: var(--color-primary-light);">Control Power</td>
+                            <td>MCC-1</td>
+                            <td>PLC-1</td>
+                            <td>14 AWG</td>
+                            <td style="text-align: right;">150</td>
+                        </tr>
+                        <tr>
+                            <td>C-002</td>
+                            <td style="background-color: var(--color-primary-light);">4-20mA Signal</td>
+                            <td>FT-001</td>
+                            <td>PLC-1</td>
+                            <td>18 AWG</td>
+                            <td style="text-align: right;">85</td>
+                        </tr>
+                        <tr>
+                            <td>C-003</td>
+                            <td style="background-color: var(--color-primary-light);">Temperature RTD</td>
+                            <td>TT-002</td>
+                            <td>PLC-1</td>
+                            <td>16 AWG</td>
+                            <td style="text-align: right;">95</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="modal-footer">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-secondary">Save Template</button>
+            <button class="btn btn-secondary">Preview Export</button>
+            <button class="btn btn-primary">Export to Excel</button>
+        </div>
+    </div>
+
+    <script>
+        // Drag and Drop functionality
+        let draggedElement = null;
+        
+        document.querySelectorAll('.field-item').forEach(item => {
+            item.addEventListener('dragstart', function(e) {
+                draggedElement = this;
+                this.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            
+            item.addEventListener('dragend', function() {
+                this.classList.remove('dragging');
+                draggedElement = null;
+            });
+        });
+        
+        const dropZone = document.getElementById('drop-zone');
+        const columnList = document.getElementById('column-list');
+        
+        [dropZone, columnList].forEach(zone => {
+            zone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('drag-over');
+            });
+            
+            zone.addEventListener('dragleave', function() {
+                this.classList.remove('drag-over');
+            });
+            
+            zone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('drag-over');
+                
+                if (draggedElement) {
+                    addColumnFromField(draggedElement);
+                }
+            });
+        });
+        
+        function addColumnFromField(fieldElement) {
+            const field = fieldElement.dataset.field;
+            const title = fieldElement.querySelector('strong').textContent;
+            
+            // Remove drop zone if it exists
+            const existingDropZone = document.querySelector('.drop-zone');
+            if (existingDropZone && existingDropZone.textContent.includes('Drag fields')) {
+                existingDropZone.remove();
+            }
+            
+            // Create new column item
+            const columnItem = document.createElement('div');
+            columnItem.className = 'column-item';
+            columnItem.dataset.field = field;
+            columnItem.innerHTML = `
+                <div>
+                    <strong>${title}</strong>
+                    <div style="font-size: var(--text-xs); color: var(--color-text-secondary);">${field}</div>
+                </div>
+                <div class="column-actions">
+                    <button class="btn btn-sm" style="padding: 0.25rem;">↑</button>
+                    <button class="btn btn-sm" style="padding: 0.25rem;">↓</button>
+                    <button class="btn btn-sm" style="padding: 0.25rem; color: var(--color-error);">✕</button>
+                </div>
+            `;
+            
+            columnList.appendChild(columnItem);
+            
+            // Add event listeners
+            columnItem.addEventListener('click', function() {
+                document.querySelectorAll('.column-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                this.classList.add('selected');
+                
+                // Update settings panel for this column
+                updateSettingsPanel(field, title);
+            });
+            
+            // Add action button listeners
+            columnItem.querySelector('.column-actions button:nth-child(3)').addEventListener('click', function(e) {
+                e.stopPropagation();
+                columnItem.remove();
+            });
+        }
+        
+        function updateSettingsPanel(field, title) {
+            document.querySelector('input[value="Description"]').value = title;
+            console.log('Updated settings for field:', field);
+        }
+        
+        // Column selection
+        document.querySelectorAll('.column-item').forEach(item => {
+            item.addEventListener('click', function() {
+                document.querySelectorAll('.column-item').forEach(i => {
+                    i.classList.remove('selected');
+                });
+                this.classList.add('selected');
+                
+                const field = this.dataset.field;
+                const title = this.querySelector('strong').textContent;
+                updateSettingsPanel(field, title);
+            });
+        });
+        
+        // Template actions
+        document.querySelector('.btn-primary').addEventListener('click', function() {
+            alert('Exporting to Excel with current template configuration...');
+        });
+        
+        document.querySelector('.btn-secondary[class*="Save"]').addEventListener('click', function() {
+            const templateName = document.querySelector('input[value*="Client ABC"]').value;
+            alert(`Template "${templateName}" saved successfully!`);
+        });
+        
+        console.log('Export template builder initialized');
+    </script>
+</body>
+</html>

@@ -1,0 +1,284 @@
+/* CableForge Layout System */
+
+/* Application Shell */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: var(--color-bg-primary);
+}
+
+/* Header */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-2) var(--spacing-4);
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-primary);
+  min-height: 3rem;
+}
+
+.app-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+
+.app-logo {
+  width: 24px;
+  height: 24px;
+  background-color: var(--color-primary);
+  border-radius: var(--radius-base);
+}
+
+.project-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.revision-badge {
+  padding: var(--spacing-1) var(--spacing-2);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: var(--radius-base);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+}
+
+.save-status {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  font-size: var(--text-xs);
+}
+
+.save-status.saving {
+  color: var(--color-warning);
+}
+
+.save-status.saved {
+  color: var(--color-success);
+}
+
+.save-status.error {
+  color: var(--color-error);
+}
+
+/* Toolbar */
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  background-color: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border-primary);
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding-right: var(--spacing-4);
+  border-right: 1px solid var(--color-border-secondary);
+}
+
+.toolbar-group:last-child {
+  border-right: none;
+}
+
+/* Main Content Area */
+.app-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Tab System */
+.tab-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tab-list {
+  display: flex;
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-primary);
+}
+
+.tab {
+  padding: var(--spacing-3) var(--spacing-4);
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.tab:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  background-color: var(--color-bg-primary);
+}
+
+.tab-panel {
+  flex: 1;
+  padding: var(--spacing-4);
+  overflow: hidden;
+  display: none;
+}
+
+.tab-panel.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Data Table Container */
+.data-table-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-lg);
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-3) var(--spacing-4);
+  background-color: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.table-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.table-content {
+  flex: 1;
+  overflow: auto;
+}
+
+/* Status Bar */
+.app-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-2) var(--spacing-4);
+  background-color: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border-primary);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  min-height: 2rem;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.status-separator {
+  width: 1px;
+  height: 1rem;
+  background-color: var(--color-border-primary);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .app-header {
+    padding: var(--spacing-2);
+  }
+  
+  .project-info {
+    display: none;
+  }
+  
+  .app-toolbar {
+    padding: var(--spacing-2);
+    flex-wrap: wrap;
+  }
+  
+  .toolbar-group {
+    padding-right: var(--spacing-2);
+    border-right: none;
+    margin-bottom: var(--spacing-1);
+  }
+  
+  .tab {
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: var(--text-xs);
+  }
+  
+  .tab-panel {
+    padding: var(--spacing-2);
+  }
+  
+  .table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-2);
+  }
+  
+  .table-actions {
+    align-self: stretch;
+    justify-content: flex-end;
+  }
+  
+  .app-status-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-1);
+  }
+  
+  .status-left,
+  .status-right {
+    gap: var(--spacing-2);
+  }
+}

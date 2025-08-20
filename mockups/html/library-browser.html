@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Browser - CableForge</title>
+    
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/theme.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/tables.css">
+</head>
+<body style="background-color: var(--color-bg-overlay); padding: 2rem;">
+    
+    <!-- Library Browser Modal -->
+    <div class="modal" style="width: 80vw; max-width: 1000px; margin: 0 auto;">
+        <div class="modal-header">
+            <h3 class="modal-title">Browse Cable Library</h3>
+            <button class="modal-close">✕</button>
+        </div>
+        
+        <div class="modal-body">
+            <!-- Library Selection -->
+            <div style="margin-bottom: 1.5rem;">
+                <label class="form-label">Library File:</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <select class="form-select" style="flex: 1;">
+                        <option>Standard Cables.cfl</option>
+                        <option>Client ABC Cables.cfl</option>
+                        <option>IS Certified Cables.cfl</option>
+                        <option>Power Distribution.cfl</option>
+                    </select>
+                    <button class="btn btn-secondary">Browse...</button>
+                    <button class="btn btn-secondary">Manage</button>
+                </div>
+            </div>
+            
+            <!-- Search and Filter -->
+            <div class="filter-bar">
+                <div class="search-box">
+                    <input type="text" class="form-input search-input" placeholder="Search cables...">
+                    <span class="search-icon">🔍</span>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <div>
+                        <label class="form-label" style="margin-bottom: 0.25rem;">Type:</label>
+                        <select class="form-select">
+                            <option>All Types</option>
+                            <option>Power</option>
+                            <option>Signal</option>
+                            <option>Control</option>
+                            <option>IS Signal</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label" style="margin-bottom: 0.25rem;">Voltage:</label>
+                        <select class="form-select">
+                            <option>All Voltages</option>
+                            <option>24V</option>
+                            <option>120V</option>
+                            <option>480V</option>
+                            <option>600V</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label" style="margin-bottom: 0.25rem;">Size:</label>
+                        <select class="form-select">
+                            <option>All Sizes</option>
+                            <option>18 AWG</option>
+                            <option>16 AWG</option>
+                            <option>14 AWG</option>
+                            <option>12 AWG</option>
+                            <option>10 AWG</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Library Items Table -->
+            <div class="data-table-container" style="height: 400px; margin-bottom: 1.5rem;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="radio" name="library-select" style="display: none;">
+                            </th>
+                            <th class="sortable">Name</th>
+                            <th class="sortable">Type</th>
+                            <th class="sortable">Size</th>
+                            <th class="sortable">Voltage</th>
+                            <th class="sortable">Cores</th>
+                            <th class="sortable">Manufacturer</th>
+                            <th class="sortable">Part Number</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="selected">
+                            <td>
+                                <input type="radio" name="library-select" checked>
+                            </td>
+                            <td>600V XLPE 3/C+Gnd</td>
+                            <td>
+                                <span class="cable-type-badge power">Power</span>
+                            </td>
+                            <td>14 AWG</td>
+                            <td>600V</td>
+                            <td>3+G</td>
+                            <td>Southwire</td>
+                            <td>SW-XLPE-3C14</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" name="library-select">
+                            </td>
+                            <td>600V XLPE 3/C+Gnd</td>
+                            <td>
+                                <span class="cable-type-badge power">Power</span>
+                            </td>
+                            <td>12 AWG</td>
+                            <td>600V</td>
+                            <td>3+G</td>
+                            <td>Southwire</td>
+                            <td>SW-XLPE-3C12</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" name="library-select">
+                            </td>
+                            <td>IS Signal Cable 2/C Shielded</td>
+                            <td>
+                                <span class="cable-type-badge is">IS Signal</span>
+                            </td>
+                            <td>18 AWG</td>
+                            <td>300V</td>
+                            <td>2</td>
+                            <td>Belden</td>
+                            <td>BLD-9841</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" name="library-select">
+                            </td>
+                            <td>Control Cable THHN 2/C</td>
+                            <td>
+                                <span class="cable-type-badge control">Control</span>
+                            </td>
+                            <td>16 AWG</td>
+                            <td>600V</td>
+                            <td>2</td>
+                            <td>General Cable</td>
+                            <td>GC-THHN-2C16</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" name="library-select">
+                            </td>
+                            <td>Instrumentation Cable 2/C Shielded</td>
+                            <td>
+                                <span class="cable-type-badge signal">Signal</span>
+                            </td>
+                            <td>18 AWG</td>
+                            <td>300V</td>
+                            <td>2</td>
+                            <td>Alpha Wire</td>
+                            <td>AW-5004C</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" name="library-select">
+                            </td>
+                            <td>Multi-Pair Data Cable 10PR</td>
+                            <td>
+                                <span class="cable-type-badge signal">Signal</span>
+                            </td>
+                            <td>22 AWG</td>
+                            <td>300V</td>
+                            <td>20</td>
+                            <td>Belden</td>
+                            <td>BLD-9738</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" name="library-select">
+                            </td>
+                            <td>Motor Feeder Cable 3/C+Gnd</td>
+                            <td>
+                                <span class="cable-type-badge power">Power</span>
+                            </td>
+                            <td>4/0 AWG</td>
+                            <td>600V</td>
+                            <td>3+G</td>
+                            <td>Southwire</td>
+                            <td>SW-XLPE-3C4/0</td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" name="library-select">
+                            </td>
+                            <td>RTD Extension Cable 3/C</td>
+                            <td>
+                                <span class="cable-type-badge signal">Signal</span>
+                            </td>
+                            <td>16 AWG</td>
+                            <td>300V</td>
+                            <td>3</td>
+                            <td>Omega</td>
+                            <td>OM-RTD-3C</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Selected Item Details -->
+            <div style="background-color: var(--color-bg-secondary); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--color-border-primary);">
+                <h4 style="margin-bottom: 1rem; color: var(--color-text-primary);">Selected Cable Details</h4>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                    <div>
+                        <label class="form-label">Name:</label>
+                        <div style="font-weight: var(--font-medium);">600V XLPE 3/C+Gnd, 14AWG</div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">Part Number:</label>
+                        <div style="font-family: var(--font-mono);">SW-XLPE-3C14</div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">Outer Diameter:</label>
+                        <div>0.52"</div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">Ampacity:</label>
+                        <div>25A (90°C rating)</div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">Temperature Rating:</label>
+                        <div>90°C</div>
+                    </div>
+                    
+                    <div>
+                        <label class="form-label">Installation:</label>
+                        <div>Wet/Dry locations</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 1rem;">
+                    <label class="form-label">Description:</label>
+                    <div style="color: var(--color-text-secondary); font-size: var(--text-sm);">
+                        XLPE insulated power cable with equipment grounding conductor. 
+                        Suitable for wet and dry locations, direct burial with additional protection. 
+                        Meets NEC requirements for power distribution applications up to 600V.
+                    </div>
+                </div>
+                
+                <div style="margin-top: 1rem;">
+                    <label class="form-label">Technical Specifications:</label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem; font-size: var(--text-sm); margin-top: 0.5rem;">
+                        <div>• Conductor: Copper</div>
+                        <div>• Insulation: XLPE</div>
+                        <div>• Jacket: PVC</div>
+                        <div>• Shielding: None</div>
+                        <div>• Armor: None</div>
+                        <div>• UL Listed: Yes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal-footer">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-secondary">Add to Favorites</button>
+            <button class="btn btn-primary">
+                <span class="icon">✓</span>
+                Use Selected Cable
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Simple interaction for library browser
+        document.querySelectorAll('input[name="library-select"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                // Remove selected class from all rows
+                document.querySelectorAll('tbody tr').forEach(row => {
+                    row.classList.remove('selected');
+                });
+                
+                // Add selected class to current row
+                this.closest('tr').classList.add('selected');
+                
+                // Update details panel (simplified for demo)
+                const row = this.closest('tr');
+                const name = row.cells[1].textContent;
+                const partNumber = row.cells[7].textContent;
+                
+                console.log('Selected:', name, partNumber);
+            });
+        });
+        
+        // Filter functionality
+        document.querySelector('.search-input').addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            document.querySelectorAll('tbody tr').forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        });
+        
+        document.querySelectorAll('.filter-bar select').forEach(select => {
+            select.addEventListener('change', function() {
+                console.log('Filter changed:', this.value);
+                // In real implementation, would filter the table
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CableForge - Cable Schedule Management</title>
+    
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/theme.css">
+    <link rel="stylesheet" href="../css/layout.css">
+    <link rel="stylesheet" href="../css/components.css">
+    <link rel="stylesheet" href="../css/tables.css">
+    
+    <!-- Icons (using simple Unicode for now) -->
+    <style>
+        .icon {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            text-align: center;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <!-- Application Header -->
+        <header class="app-header">
+            <div class="app-title">
+                <div class="app-logo"></div>
+                <span>CableForge</span>
+                <span style="font-weight: normal; margin-left: 0.5rem;">- Compressor Station Alpha</span>
+                <span class="save-status saved">
+                    <span class="icon">✓</span>
+                    <span>Saved</span>
+                </span>
+            </div>
+            
+            <div class="project-info">
+                <span>Client: ABC Gas Company</span>
+                <span>Engineer: John Smith, PE</span>
+                <span class="revision-badge">Rev 2.3</span>
+            </div>
+        </header>
+
+        <!-- Toolbar -->
+        <div class="app-toolbar">
+            <div class="toolbar-group">
+                <button class="btn btn-secondary btn-sm">
+                    <span class="icon">📁</span>
+                    New
+                </button>
+                <button class="btn btn-secondary btn-sm">
+                    <span class="icon">💾</span>
+                    Save
+                </button>
+                <button class="btn btn-secondary btn-sm">
+                    <span class="icon">📂</span>
+                    Open
+                </button>
+            </div>
+            
+            <div class="toolbar-group">
+                <button class="btn btn-secondary btn-sm">
+                    <span class="icon">📥</span>
+                    Import
+                </button>
+                <button class="btn btn-secondary btn-sm">
+                    <span class="icon">📤</span>
+                    Export
+                </button>
+            </div>
+            
+            <div class="toolbar-group">
+                <button class="btn btn-secondary btn-sm">
+                    <span class="icon">📚</span>
+                    Library
+                </button>
+                <button class="btn btn-secondary btn-sm">
+                    <span class="icon">🔧</span>
+                    Settings
+                </button>
+            </div>
+            
+            <div class="toolbar-group">
+                <div class="search-box">
+                    <input type="text" class="form-input search-input" placeholder="Search...">
+                    <span class="search-icon icon">🔍</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <main class="app-main">
+            <div class="app-content">
+                <!-- Tab Container -->
+                <div class="tab-container">
+                    <!-- Tab Navigation -->
+                    <div class="tab-list" role="tablist">
+                        <button class="tab active" role="tab" data-tab="cables">
+                            <span class="icon">🔌</span>
+                            Cables
+                        </button>
+                        <button class="tab" role="tab" data-tab="io">
+                            <span class="icon">📡</span>
+                            I/O List
+                        </button>
+                        <button class="tab" role="tab" data-tab="conduits">
+                            <span class="icon">🔧</span>
+                            Conduits
+                        </button>
+                        <button class="tab" role="tab" data-tab="loads">
+                            <span class="icon">⚡</span>
+                            Loads
+                        </button>
+                        <button class="tab" role="tab" data-tab="reports">
+                            <span class="icon">📊</span>
+                            Reports
+                        </button>
+                    </div>
+
+                    <!-- Tab Panels -->
+                    
+                    <!-- Cables Tab Panel -->
+                    <div class="tab-panel active" id="cables-panel">
+                        <div class="data-table-container">
+                            <div class="table-header">
+                                <h2 class="table-title">Cable Schedule</h2>
+                                <div class="table-actions">
+                                    <button class="btn btn-primary btn-sm">
+                                        <span class="icon">➕</span>
+                                        Add Cable
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm">
+                                        <span class="icon">📚</span>
+                                        Add from Library
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm">
+                                        <span class="icon">📋</span>
+                                        Bulk Edit
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-content">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="row-select">
+                                                <input type="checkbox" title="Select all">
+                                            </th>
+                                            <th class="sortable" data-sort="tag">
+                                                Tag
+                                                <span class="sort-indicator"></span>
+                                            </th>
+                                            <th class="sortable" data-sort="description">
+                                                Description
+                                                <span class="sort-indicator"></span>
+                                            </th>
+                                            <th class="sortable" data-sort="function">
+                                                Function
+                                                <span class="sort-indicator"></span>
+                                            </th>
+                                            <th class="sortable" data-sort="from_equipment">
+                                                From
+                                                <span class="sort-indicator"></span>
+                                            </th>
+                                            <th class="sortable" data-sort="to_equipment">
+                                                To
+                                                <span class="sort-indicator"></span>
+                                            </th>
+                                            <th class="sortable" data-sort="size">
+                                                Size
+                                                <span class="sort-indicator"></span>
+                                            </th>
+                                            <th class="sortable" data-sort="length">
+                                                Length
+                                                <span class="sort-indicator"></span>
+                                            </th>
+                                            <th class="sortable" data-sort="route">
+                                                Route
+                                                <span class="sort-indicator"></span>
+                                            </th>
+                                            <th class="sortable" data-sort="voltage_drop">
+                                                V.Drop
+                                                <span class="sort-indicator"></span>
+                                            </th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td class="row-select">
+                                                <input type="checkbox">
+                                            </td>
+                                            <td class="editable-cell col-tag">C-001</td>
+                                            <td class="editable-cell">Control Power</td>
+                                            <td class="editable-cell">
+                                                <span class="cable-type-badge power">Power</span>
+                                            </td>
+                                            <td class="editable-cell">MCC-1</td>
+                                            <td class="editable-cell">PLC-1</td>
+                                            <td class="editable-cell col-numeric">14 AWG</td>
+                                            <td class="editable-cell col-numeric">150'</td>
+                                            <td class="editable-cell col-route">C01,C05</td>
+                                            <td class="col-numeric status-ok">1.2%</td>
+                                            <td>
+                                                <div class="cell-actions">
+                                                    <button class="cell-action-btn" title="Edit">✏️</button>
+                                                    <button class="cell-action-btn" title="Delete">🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="row-select">
+                                                <input type="checkbox">
+                                            </td>
+                                            <td class="editable-cell col-tag">C-002</td>
+                                            <td class="editable-cell">4-20mA Signal</td>
+                                            <td class="editable-cell">
+                                                <span class="cable-type-badge signal">Signal</span>
+                                            </td>
+                                            <td class="editable-cell">FT-001</td>
+                                            <td class="editable-cell">PLC-1</td>
+                                            <td class="editable-cell col-numeric">18 AWG</td>
+                                            <td class="editable-cell col-numeric">85'</td>
+                                            <td class="editable-cell col-route">C01,C02</td>
+                                            <td class="col-numeric">-</td>
+                                            <td>
+                                                <div class="cell-actions">
+                                                    <button class="cell-action-btn" title="Edit">✏️</button>
+                                                    <button class="cell-action-btn" title="Delete">🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="row-select">
+                                                <input type="checkbox">
+                                            </td>
+                                            <td class="editable-cell col-tag">C-003</td>
+                                            <td class="editable-cell">Temperature RTD</td>
+                                            <td class="editable-cell">
+                                                <span class="cable-type-badge signal">Signal</span>
+                                            </td>
+                                            <td class="editable-cell">TT-002</td>
+                                            <td class="editable-cell">PLC-1</td>
+                                            <td class="editable-cell col-numeric">16 AWG</td>
+                                            <td class="editable-cell col-numeric">95'</td>
+                                            <td class="editable-cell col-route">C01,C02</td>
+                                            <td class="col-numeric">-</td>
+                                            <td>
+                                                <div class="cell-actions">
+                                                    <button class="cell-action-btn" title="Edit">✏️</button>
+                                                    <button class="cell-action-btn" title="Delete">🗑️</button>
+                                                    <span class="segregation-warning" title="Segregation warning">⚠️</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="row-select">
+                                                <input type="checkbox">
+                                            </td>
+                                            <td class="editable-cell col-tag">C-004</td>
+                                            <td class="editable-cell">Motor Power</td>
+                                            <td class="editable-cell">
+                                                <span class="cable-type-badge power">Power</span>
+                                            </td>
+                                            <td class="editable-cell">MCC-2</td>
+                                            <td class="editable-cell">M-001</td>
+                                            <td class="editable-cell col-numeric">4/0 AWG</td>
+                                            <td class="editable-cell col-numeric">200'</td>
+                                            <td class="editable-cell col-route">C10</td>
+                                            <td class="col-numeric status-warning">2.8%</td>
+                                            <td>
+                                                <div class="cell-actions">
+                                                    <button class="cell-action-btn" title="Edit">✏️</button>
+                                                    <button class="cell-action-btn" title="Delete">🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="row-select">
+                                                <input type="checkbox">
+                                            </td>
+                                            <td class="editable-cell col-tag">C-005</td>
+                                            <td class="editable-cell">Spare</td>
+                                            <td class="editable-cell">
+                                                <span class="cable-type-badge spare">Spare</span>
+                                            </td>
+                                            <td class="editable-cell">-</td>
+                                            <td class="editable-cell">-</td>
+                                            <td class="editable-cell col-numeric">14 AWG</td>
+                                            <td class="editable-cell col-numeric">100'</td>
+                                            <td class="editable-cell col-route">-</td>
+                                            <td class="col-numeric">-</td>
+                                            <td>
+                                                <div class="cell-actions">
+                                                    <button class="cell-action-btn" title="Edit">✏️</button>
+                                                    <button class="cell-action-btn" title="Delete">🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="table-footer">
+                                <div class="table-stats">
+                                    <span>5 cables selected</span>
+                                    <span class="status-separator"></span>
+                                    <span>247 total cables</span>
+                                    <span class="status-separator"></span>
+                                    <span>15 validation warnings</span>
+                                </div>
+                                <div class="table-pagination">
+                                    <button class="btn btn-secondary btn-sm">Previous</button>
+                                    <span>Page 1 of 25</span>
+                                    <button class="btn btn-secondary btn-sm">Next</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- I/O List Tab Panel -->
+                    <div class="tab-panel" id="io-panel">
+                        <div class="data-table-container">
+                            <div class="table-header">
+                                <h2 class="table-title">I/O List</h2>
+                                <div class="table-actions">
+                                    <button class="btn btn-primary btn-sm">
+                                        <span class="icon">➕</span>
+                                        Add I/O Point
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm">
+                                        <span class="icon">📚</span>
+                                        Add from Library
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-content">
+                                <div class="table-empty">
+                                    <div class="table-empty-icon">📡</div>
+                                    <div class="table-empty-title">No I/O Points Yet</div>
+                                    <div class="table-empty-description">
+                                        Add your first I/O point to get started with control system design.
+                                    </div>
+                                    <button class="btn btn-primary">Add I/O Point</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Conduits Tab Panel -->
+                    <div class="tab-panel" id="conduits-panel">
+                        <div class="data-table-container">
+                            <div class="table-header">
+                                <h2 class="table-title">Conduit Schedule</h2>
+                                <div class="table-actions">
+                                    <button class="btn btn-primary btn-sm">
+                                        <span class="icon">➕</span>
+                                        Add Conduit
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm">
+                                        <span class="icon">📊</span>
+                                        Fill Report
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-content">
+                                <div class="table-empty">
+                                    <div class="table-empty-icon">🔧</div>
+                                    <div class="table-empty-title">No Conduits Defined</div>
+                                    <div class="table-empty-description">
+                                        Add conduits to track cable routing and fill calculations.
+                                    </div>
+                                    <button class="btn btn-primary">Add Conduit</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Loads Tab Panel -->
+                    <div class="tab-panel" id="loads-panel">
+                        <div class="data-table-container">
+                            <div class="table-header">
+                                <h2 class="table-title">Load List</h2>
+                                <div class="table-actions">
+                                    <button class="btn btn-primary btn-sm">
+                                        <span class="icon">➕</span>
+                                        Add Load
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm">
+                                        <span class="icon">🔗</span>
+                                        Generate Cables
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-content">
+                                <div class="table-empty">
+                                    <div class="table-empty-icon">⚡</div>
+                                    <div class="table-empty-title">No Loads Defined</div>
+                                    <div class="table-empty-description">
+                                        Add electrical loads to generate power cable requirements.
+                                    </div>
+                                    <button class="btn btn-primary">Add Load</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Reports Tab Panel -->
+                    <div class="tab-panel" id="reports-panel">
+                        <div class="data-table-container">
+                            <div class="table-header">
+                                <h2 class="table-title">Reports & Export</h2>
+                                <div class="table-actions">
+                                    <button class="btn btn-primary btn-sm">
+                                        <span class="icon">📊</span>
+                                        Generate Report
+                                    </button>
+                                    <button class="btn btn-secondary btn-sm">
+                                        <span class="icon">⚙️</span>
+                                        Template Builder
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-content">
+                                <div class="table-empty">
+                                    <div class="table-empty-icon">📊</div>
+                                    <div class="table-empty-title">Reports & Templates</div>
+                                    <div class="table-empty-description">
+                                        Generate professional reports and configure export templates.
+                                    </div>
+                                    <button class="btn btn-primary">Create Report</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Status Bar -->
+        <footer class="app-status-bar">
+            <div class="status-left">
+                <div class="status-item">
+                    <span>Cables: 247</span>
+                </div>
+                <div class="status-separator"></div>
+                <div class="status-item">
+                    <span>I/O Points: 89</span>
+                </div>
+                <div class="status-separator"></div>
+                <div class="status-item">
+                    <span>Conduits: 15</span>
+                </div>
+                <div class="status-separator"></div>
+                <div class="status-item">
+                    <span class="status-warning">Fill Warnings: 3</span>
+                </div>
+            </div>
+            
+            <div class="status-right">
+                <div class="status-item">
+                    <span>Last Saved: 2:34 PM</span>
+                </div>
+                <div class="status-separator"></div>
+                <div class="status-item">
+                    <span>Ready</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="../js/mockup-interactions.js"></script>
+</body>
+</html>

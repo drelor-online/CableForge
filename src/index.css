@@ -1,13 +1,398 @@
+/* CableForge Custom CSS Variables (from our mockups) */
+:root {
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* Colors - Professional Engineering Theme */
+  --color-primary: #1e40af;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-light: #dbeafe;
+
+  --color-success: #059669;
+  --color-success-light: #d1fae5;
+
+  --color-warning: #d97706;
+  --color-warning-light: #fef3c7;
+
+  --color-error: #dc2626;
+  --color-error-light: #fee2e2;
+
+  /* Cable Type Colors */
+  --cable-power: #dc2626;
+  --cable-signal: #2563eb;
+  --cable-control: #059669;
+  --cable-spare: #9ca3af;
+  --cable-is: #7c3aed;
+
+  /* AG-Grid Theme Variables - Compact Design */
+  --ag-header-height: 28px;
+  --ag-header-background-color: #f8fafc;
+  --ag-header-foreground-color: #475569;
+  --ag-border-color: #f1f5f9;
+  --ag-row-height: 28px;
+  --ag-list-item-height: 24px;
+  --ag-cell-horizontal-padding: 8px;
+  
+  /* Compact Header Colors */
+  --header-bg: #2c3e50;
+  --header-text: #ffffff;
+  --header-text-muted: rgba(255, 255, 255, 0.6);
+  
+  /* Filter Bar Colors */
+  --filter-bar-bg: #f1f3f4;
+  --filter-bar-border: #e0e0e0;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #ffffff;
+  color: #111827;
+  height: 100vh;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: var(--font-mono);
 }
+
+/* AG-Grid Custom Styling - Compact Theme */
+.ag-theme-cableforge {
+  --ag-font-family: var(--font-sans);
+  --ag-font-size: 13px;
+  --ag-header-background-color: var(--ag-header-background-color);
+  --ag-header-foreground-color: var(--ag-header-foreground-color);
+  --ag-border-color: var(--ag-border-color);
+  --ag-row-hover-color: #f8fafc;
+  --ag-selected-row-background-color: #e2e8f0;
+  --ag-cell-horizontal-padding: var(--ag-cell-horizontal-padding);
+  --ag-odd-row-background-color: #fdfdfd;
+  --ag-even-row-background-color: #fafafa;
+}
+
+.ag-theme-cableforge .ag-header-cell {
+  font-weight: 500;
+  font-size: 12px;
+  border-bottom: 1px solid var(--ag-border-color);
+}
+
+.ag-theme-cableforge .ag-row {
+  border-bottom: 1px solid #f8fafc;
+}
+
+.ag-theme-cableforge .ag-row:hover {
+  background-color: var(--ag-row-hover-color);
+}
+
+.ag-theme-cableforge .ag-row.ag-row-selected {
+  background-color: var(--ag-selected-row-background-color);
+  border-left: 2px solid #2563eb;
+}
+
+/* Cable Type Badges - Compact */
+.cable-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.cable-badge-power {
+  background-color: #fef2f2;
+  color: #b91c1c;
+}
+
+.cable-badge-signal {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+.cable-badge-control {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+
+.cable-badge-spare {
+  background-color: #f8fafc;
+  color: #64748b;
+}
+
+.cable-badge-is {
+  background-color: #f8fafc;
+  color: #7c3aed;
+}
+
+/* Status Indicators */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-ok {
+  color: var(--color-success);
+}
+
+.status-warning {
+  color: var(--color-warning);
+}
+
+.status-error {
+  color: var(--color-error);
+}
+
+/* Validation Status Classes */
+.validation-error {
+  color: var(--color-error);
+}
+
+.validation-warning {
+  color: var(--color-warning);
+}
+
+.validation-info {
+  color: #2563eb;
+}
+
+.validation-ok {
+  color: var(--color-success);
+}
+
+/* Validation Cell Indicators - Subtle */
+.ag-theme-cableforge .validation-error-cell {
+  background-color: #fef8f8 !important;
+  border-left: 2px solid #f87171 !important;
+}
+
+.ag-theme-cableforge .validation-warning-cell {
+  background-color: #fffef7 !important;
+  border-left: 2px solid #fbbf24 !important;
+}
+
+.ag-theme-cableforge .validation-info-cell {
+  background-color: #f8faff !important;
+  border-left: 2px solid #60a5fa !important;
+}
+
+/* Validation Row Indicators - Subtle */
+.ag-theme-cableforge .validation-error-row {
+  border-left: 2px solid #f87171 !important;
+}
+
+.ag-theme-cableforge .validation-warning-row {
+  border-left: 2px solid #fbbf24 !important;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f9fafb;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Basic utility classes to replace Tailwind */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-1 { flex: 1; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-4 { gap: 16px; }
+.p-1 { padding: 4px; }
+.p-2 { padding: 8px; }
+.p-4 { padding: 16px; }
+.px-2 { padding-left: 8px; padding-right: 8px; }
+.px-3 { padding-left: 12px; padding-right: 12px; }
+.px-4 { padding-left: 16px; padding-right: 16px; }
+.py-1 { padding-top: 4px; padding-bottom: 4px; }
+.py-2 { padding-top: 8px; padding-bottom: 8px; }
+.py-3 { padding-top: 12px; padding-bottom: 12px; }
+.text-sm { font-size: 14px; }
+.text-lg { font-size: 18px; }
+.text-xl { font-size: 20px; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-mono { font-family: var(--font-mono); }
+.text-gray-500 { color: #6b7280; }
+.text-gray-600 { color: #4b5563; }
+.text-gray-700 { color: #374151; }
+.text-gray-900 { color: #111827; }
+.text-white { color: white; }
+.text-blue-600 { color: #2563eb; }
+.bg-white { background-color: white; }
+.bg-gray-50 { background-color: #f9fafb; }
+.bg-gray-100 { background-color: #f3f4f6; }
+.bg-blue-600 { background-color: #2563eb; }
+.bg-blue-700 { background-color: #1d4ed8; }
+.border { border: 1px solid #e5e7eb; }
+.border-b { border-bottom: 1px solid #e5e7eb; }
+.border-gray-200 { border-color: #e5e7eb; }
+.border-gray-300 { border-color: #d1d5db; }
+.border-blue-600 { border-color: #2563eb; }
+.rounded { border-radius: 4px; }
+.h-full { height: 100%; }
+.h-screen { height: 100vh; }
+.w-full { width: 100%; }
+.max-w-md { max-width: 28rem; }
+.overflow-hidden { overflow: hidden; }
+.relative { position: relative; }
+.absolute { position: absolute; }
+.hover\:bg-gray-50:hover { background-color: #f9fafb; }
+.hover\:bg-blue-700:hover { background-color: #1d4ed8; }
+.hover\:text-gray-900:hover { color: #111827; }
+.transition-colors { transition: color 0.15s, background-color 0.15s, border-color 0.15s; }
+.disabled\:opacity-50:disabled { opacity: 0.5; }
+.disabled\:cursor-not-allowed:disabled { cursor: not-allowed; }
+.text-center { text-align: center; }
+.mb-2 { margin-bottom: 8px; }
+.mb-4 { margin-bottom: 16px; }
+.mb-6 { margin-bottom: 24px; }
+.text-4xl { font-size: 2.25rem; }
+.shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+
+/* Compact Design Utilities */
+.h-9 { height: 36px; }
+.h-10 { height: 40px; }
+.h-7 { height: 28px; }
+.bg-slate-700 { background-color: var(--header-bg); }
+.bg-slate-50 { background-color: var(--filter-bar-bg); }
+.border-slate-200 { border-color: var(--filter-bar-border); }
+.border-slate-600 { border-color: rgba(255, 255, 255, 0.2); }
+.text-slate-600 { color: #475569; }
+.text-slate-500 { color: #64748b; }
+.text-white\/60 { color: rgba(255, 255, 255, 0.6); }
+.text-white\/80 { color: rgba(255, 255, 255, 0.8); }
+.bg-white\/10 { background-color: rgba(255, 255, 255, 0.1); }
+.bg-white\/20 { background-color: rgba(255, 255, 255, 0.2); }
+.border-white\/20 { border-color: rgba(255, 255, 255, 0.2); }
+.max-w-80 { max-width: 320px; }
+
+/* AG-Grid Compact Theme Adjustments */
+.ag-theme-cableforge .ag-header {
+  min-height: var(--ag-header-height);
+}
+
+.ag-theme-cableforge .ag-row {
+  min-height: var(--ag-row-height);
+}
+
+.ag-theme-cableforge .ag-cell {
+  padding: 4px var(--ag-cell-horizontal-padding);
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+}
+
+/* Remove grid lines for cleaner look */
+.ag-theme-cableforge .ag-cell:not(.ag-cell-focus) {
+  border-right: none;
+}
+
+.ag-theme-cableforge .ag-header-cell {
+  border-right: none;
+}
+
+/* Pinned columns styling */
+.ag-theme-cableforge .ag-pinned-left-cols-container {
+  border-right: 1px solid #e2e8f0;
+}
+
+.ag-theme-cableforge .ag-pinned-right-cols-container {
+  border-left: 1px solid #e2e8f0;
+}
+
+/* Empty row styling for new cable entry */
+.ag-theme-cableforge .empty-row {
+  background-color: #fafbfc !important;
+  border-top: 2px dashed #cbd5e1 !important;
+}
+
+.ag-theme-cableforge .empty-row:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* Additional utility classes for layout */
+.min-w-0 { min-width: 0; }
+.min-h-0 { min-height: 0; }
+.space-x-2 > * + * { margin-left: 8px; }
+.space-y-2 > * + * { margin-top: 8px; }
+.cursor-pointer { cursor: pointer; }
+.cursor-not-allowed { cursor: not-allowed; }
+.select-none { user-select: none; }
+.pointer-events-none { pointer-events: none; }
+.opacity-50 { opacity: 0.5; }
+.opacity-75 { opacity: 0.75; }
+.z-10 { z-index: 10; }
+.z-50 { z-index: 50; }
+
+/* Focus and hover states */
+.focus\:outline-none:focus { outline: none; }
+.focus\:ring-2:focus { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); }
+.hover\:shadow-md:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+
+/* Text alignment and sizing */
+.text-right { text-align: right; }
+.text-xs { font-size: 12px; }
+.font-bold { font-weight: 700; }
+.leading-tight { line-height: 1.25; }
+
+/* Colors for validation states */
+.text-red-600 { color: #dc2626; }
+.text-yellow-600 { color: #d97706; }
+.text-green-600 { color: #059669; }
+.text-blue-600 { color: #2563eb; }
+.text-blue-700 { color: #1d4ed8; }
+.text-slate-500 { color: #64748b; }
+.text-slate-600 { color: #475569; }
+
+/* Background colors */
+.bg-red-50 { background-color: #fef2f2; }
+.bg-blue-50 { background-color: #eff6ff; }
+.bg-blue-600 { background-color: #2563eb; }
+.bg-blue-700 { background-color: #1d4ed8; }
+.bg-gray-600 { background-color: #4b5563; }
+.bg-gray-700 { background-color: #374151; }
+.bg-slate-50 { background-color: #f8fafc; }
+.bg-slate-700 { background-color: #334155; }
+
+/* Border colors */
+.border-blue-300 { border-color: #93c5fd; }
+.border-slate-200 { border-color: #e2e8f0; }
+.border-slate-300 { border-color: #cbd5e1; }
+.border-slate-600 { border-color: #475569; }
+.border-2 { border-width: 2px; }
+.border-transparent { border-color: transparent; }
+
+/* Responsive and positioning */
+.inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+.fixed { position: fixed; }
+.top-0 { top: 0; }
+.right-0 { right: 0; }
+.bottom-0 { bottom: 0; }
+.left-0 { left: 0; }
+
+/* Display utilities */
+.hidden { display: none; }
+.block { display: block; }
+.inline { display: inline; }
+.inline-block { display: inline-block; }
+.table { display: table; }
+.grid { display: grid; }

@@ -1,0 +1,459 @@
+/* CableForge Data Table Styles */
+
+/* Main Data Table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--color-bg-primary);
+  font-size: var(--text-sm);
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--table-cell-padding);
+  text-align: left;
+  border-bottom: var(--table-border-width) solid var(--color-border-secondary);
+  position: relative;
+}
+
+/* Table Header */
+.data-table thead {
+  background-color: var(--color-bg-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.data-table th {
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border-primary);
+  height: var(--table-row-height);
+  vertical-align: middle;
+}
+
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--transition-fast);
+}
+
+.data-table th.sortable:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.data-table th.sorted {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+/* Sort Indicators */
+.sort-indicator {
+  display: inline-block;
+  margin-left: var(--spacing-1);
+  opacity: 0.5;
+  transition: opacity var(--transition-fast);
+}
+
+.data-table th.sortable:hover .sort-indicator,
+.data-table th.sorted .sort-indicator {
+  opacity: 1;
+}
+
+.sort-indicator.asc::after {
+  content: '↑';
+}
+
+.sort-indicator.desc::after {
+  content: '↓';
+}
+
+/* Filter Dropdowns in Headers */
+.header-filter {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border-primary);
+  border-top: none;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 20;
+  display: none;
+}
+
+.header-filter.active {
+  display: block;
+}
+
+.filter-option {
+  padding: var(--spacing-2) var(--spacing-3);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.filter-option:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.filter-option.selected {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+/* Table Body */
+.data-table tbody tr {
+  transition: background-color var(--transition-fast);
+  height: var(--table-row-height);
+}
+
+.data-table tbody tr:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.data-table tbody tr.selected {
+  background-color: var(--color-bg-selected);
+}
+
+.data-table tbody tr.editing {
+  background-color: var(--color-primary-light);
+}
+
+.data-table td {
+  vertical-align: middle;
+  color: var(--color-text-primary);
+}
+
+/* Cell Selection */
+.data-table td.selected {
+  background-color: var(--color-primary-light);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* Row Selection Checkbox */
+.row-select {
+  width: 2rem;
+  text-align: center;
+}
+
+.row-select input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+/* Editable Cells */
+.editable-cell {
+  cursor: text;
+  position: relative;
+}
+
+.editable-cell:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.editable-cell.editing {
+  padding: 0;
+}
+
+.cell-editor {
+  width: 100%;
+  height: 100%;
+  padding: var(--table-cell-padding);
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+
+.cell-editor:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* Cell Status Indicators */
+.cell-status {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.cell-status.modified {
+  background-color: var(--color-warning);
+}
+
+.cell-status.error {
+  background-color: var(--color-error);
+}
+
+.cell-status.calculated {
+  background-color: var(--color-info);
+}
+
+/* Column Types */
+.col-tag {
+  font-family: var(--font-mono);
+  font-weight: var(--font-medium);
+  color: var(--color-primary);
+}
+
+.col-numeric {
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+.col-status {
+  text-align: center;
+}
+
+.col-notes {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-route {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Status Cell Content */
+.status-ok {
+  color: var(--color-success);
+}
+
+.status-warning {
+  color: var(--color-warning);
+}
+
+.status-error {
+  color: var(--color-error);
+}
+
+.status-pending {
+  color: var(--color-gray-400);
+}
+
+/* Fill Percentage Cells */
+.fill-percentage {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.fill-bar {
+  flex: 1;
+  height: 0.5rem;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.fill-progress {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--transition-normal);
+}
+
+.fill-progress.ok {
+  background-color: var(--fill-ok);
+}
+
+.fill-progress.warning {
+  background-color: var(--fill-warning);
+}
+
+.fill-progress.error {
+  background-color: var(--fill-error);
+}
+
+.fill-text {
+  min-width: 3rem;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* Cable Type Indicators */
+.cable-type-badge {
+  display: inline-block;
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-base);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+}
+
+.cable-type-badge.power {
+  background-color: #fee2e2;
+  color: var(--cable-power);
+}
+
+.cable-type-badge.signal {
+  background-color: #dbeafe;
+  color: var(--cable-signal);
+}
+
+.cable-type-badge.control {
+  background-color: #d1fae5;
+  color: var(--cable-control);
+}
+
+.cable-type-badge.spare {
+  background-color: var(--color-gray-100);
+  color: var(--cable-spare);
+}
+
+.cable-type-badge.is {
+  background-color: #ede9fe;
+  color: var(--cable-is);
+}
+
+/* Segregation Warning Indicators */
+.segregation-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  color: var(--color-warning);
+  cursor: help;
+}
+
+.segregation-error {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  color: var(--color-error);
+  cursor: help;
+}
+
+/* Action Buttons in Cells */
+.cell-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.data-table tbody tr:hover .cell-actions {
+  opacity: 1;
+}
+
+.cell-action-btn {
+  padding: var(--spacing-1);
+  border: none;
+  background: none;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-base);
+  transition: all var(--transition-fast);
+}
+
+.cell-action-btn:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+/* Empty State */
+.table-empty {
+  text-align: center;
+  padding: var(--spacing-16) var(--spacing-8);
+  color: var(--color-text-tertiary);
+}
+
+.table-empty-icon {
+  width: 3rem;
+  height: 3rem;
+  margin: 0 auto var(--spacing-4);
+  opacity: 0.3;
+}
+
+.table-empty-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-medium);
+  margin-bottom: var(--spacing-2);
+}
+
+.table-empty-description {
+  font-size: var(--text-sm);
+  margin-bottom: var(--spacing-4);
+}
+
+/* Table Footer */
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-3) var(--spacing-4);
+  background-color: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border-primary);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.table-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+.table-pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+/* Responsive Table */
+@media (max-width: 768px) {
+  .data-table {
+    font-size: var(--text-xs);
+  }
+  
+  .data-table th,
+  .data-table td {
+    padding: var(--spacing-2);
+  }
+  
+  .data-table .col-notes {
+    max-width: 100px;
+  }
+  
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-2);
+  }
+  
+  .table-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-2);
+  }
+}
+
+/* Virtual Scrolling Support */
+.virtual-table-container {
+  height: 100%;
+  overflow: auto;
+}
+
+.virtual-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+}
+
+.virtual-cell {
+  padding: var(--table-cell-padding);
+  border-right: 1px solid var(--color-border-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
