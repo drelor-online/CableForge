@@ -10,6 +10,7 @@ interface CompactHeaderProps {
     infoCount: number;
   };
   onExport: () => void;
+  onImport?: () => void;
   onOpenAutoNumbering?: () => void;
   onOpenFindReplace?: () => void;
 }
@@ -19,6 +20,7 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
   onTabChange,
   validationCounts,
   onExport,
+  onImport,
   onOpenAutoNumbering,
   onOpenFindReplace
 }) => {
@@ -96,6 +98,14 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
               title="Auto-numbering Settings"
             >
               ⚙️
+            </button>
+          )}
+          {onImport && activeTab === 'cables' && (
+            <button
+              onClick={onImport}
+              className="px-3 py-1 text-xs font-medium bg-white/10 text-white border border-white/20 rounded hover:bg-white/20 transition-colors"
+            >
+              Import
             </button>
           )}
           <button

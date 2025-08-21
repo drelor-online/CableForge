@@ -5,12 +5,17 @@ import { Cable } from '../../types';
 import { ValidationStatus } from '../../types/validation';
 import { validationService } from '../../services/validation-service';
 import { autoNumberingService } from '../../services/auto-numbering-service';
+import { ColumnDefinition, columnService } from '../../services/column-service';
+import { FilterCondition, filterService } from '../../services/filter-service';
+import { createColumnDef, createSelectionColumn } from '../../utils/ag-grid-utils';
+import FilterRow from '../filters/FilterRow';
 import CableTypeBadge from '../ui/CableTypeBadge';
 import StatusIndicator from '../ui/StatusIndicator';
 import ValidationIndicator from '../ui/ValidationIndicator';
 import KebabMenu from '../ui/KebabMenu';
 import BulkActionsBar from './BulkActionsBar';
 import DuplicateCablesModal from '../modals/DuplicateCablesModal';
+import ColumnManagerModal from '../modals/ColumnManagerModal';
 import { useUI } from '../../contexts/UIContext';
 
 interface CableTableProps {
@@ -63,6 +68,23 @@ const CableTable: React.FC<CableTableProps> = ({
   
   // Duplicate modal state
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  
+  // Column management state
+  const [columnDefinitions, setColumnDefinitions] = useState<ColumnDefinition[]>([]);
+  const [showColumnManager, setShowColumnManager] = useState(false);
+  
+  // Filter state
+  const [activeFilters, setActiveFilters] = useState<FilterCondition[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Load column settings and filters on mount
+  useEffect(() => {
+    const savedColumns = columnService.loadColumnSettings();
+    setColumnDefinitions(savedColumns);
+    
+    const filterState = filterService.getFilterState();
+    setActiveFilters(filterState.activeFilters);
+  }, []);
 
   // Apply filters using props
   useEffect(() => {
@@ -135,7 +157,15 @@ const CableTable: React.FC<CableTableProps> = ({
     
     filtered.push(emptyRow);
     setFilteredCables(filtered);
-  }, [cables, searchTerm, functionFilter, voltageFilter, routeFilter, fromFilter, toFilter]);
+    
+    // Apply advanced filters
+    if (activeFilters.length > 0) {
+      // Create a temporary filter service instance with current filters
+      const tempFilterService = filterService;
+      tempFilterService.setActiveFilters(activeFilters);
+      filtered = tempFilterService.applyFilters(filtered);
+    }
+  }, [cables, searchTerm, functionFilter, voltageFilter, routeFilter, fromFilter, toFilter, activeFilters]);
 
   // AG-Grid event handlers
   const onGridReady = useCallback((params: GridReadyEvent) => {
@@ -294,6 +324,29 @@ const CableTable: React.FC<CableTableProps> = ({
       showError(`Failed to duplicate cables: ${error}`);
     }
   }, [cables, onAddCable, showSuccess, showError]);
+
+  // Column manager handlers
+  const handleOpenColumnManager = useCallback(() => {
+    setShowColumnManager(true);
+  }, []);
+
+  const handleCloseColumnManager = useCallback(() => {
+    setShowColumnManager(false);
+  }, []);
+
+  const handleApplyColumns = useCallback((newColumns: ColumnDefinition[]) => {
+    setColumnDefinitions(newColumns);
+    showSuccess('Column settings applied successfully!');
+  }, [showSuccess]);
+
+  // Filter handlers
+  const handleToggleFilters = useCallback(() => {
+    setShowFilters(!showFilters);
+  }, [showFilters]);
+
+  const handleFiltersChange = useCallback((filters: FilterCondition[]) => {
+    setActiveFilters(filters);
+  }, []);
 
   // Get validation status for a cable
   const getCableValidationStatus = useCallback((cableId?: number): ValidationStatus => {
@@ -547,7 +600,61 @@ const CableTable: React.FC<CableTableProps> = ({
         return <KebabMenu items={menuItems} />;
       }
     }
-  ], [onCableEdit, handleDeleteCable, getCableValidationStatus]);
+  ], [columnDefinitions, onCableEdit, handleDeleteCable, getCableValidationStatus]);
+
+  // Dynamic column definitions (replacing the static ones above)
+  const dynamicColumnDefs: ColDef[] = useMemo(() => {
+    if (columnDefinitions.length === 0) return [];
+    
+    const visibleColumns = columnService.getVisibleColumns(columnDefinitions);
+    const dynamicColumns = visibleColumns.map(colDef => createColumnDef(colDef));
+    
+    // Add selection column and actions column
+    const columns = [
+      createSelectionColumn(),
+      ...dynamicColumns,
+      // Actions column (always present)
+      {
+        headerName: '',
+        field: 'actions',
+        width: 80,
+        pinned: 'right' as const,
+        sortable: false,
+        filter: false,
+        cellRenderer: (params: any) => {
+          if (params.data.id === -1) return null; // No actions for empty row
+          
+          const cable = params.data as Cable;
+          const status = getCableValidationStatus(cable.id);
+          
+          return (
+            <div className="flex items-center gap-1 h-full">
+              <ValidationIndicator 
+                status={status}
+              />
+              <KebabMenu
+                items={[
+                  {
+                    label: 'Edit',
+                    onClick: () => onCableEdit?.(cable),
+                    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  },
+                  {
+                    label: 'Delete',
+                    onClick: () => handleDeleteCable(cable),
+                    variant: 'danger' as const,
+                    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  }
+                ]}
+              />
+            </div>
+          );
+        }
+      }
+    ];
+    
+    return columns;
+  }, [columnDefinitions, onCableEdit, handleDeleteCable, getCableValidationStatus]);
 
   // Default column definition
   const defaultColDef: ColDef = {
@@ -563,11 +670,54 @@ const CableTable: React.FC<CableTableProps> = ({
 
   return (
     <div className="h-full flex flex-col">
+      {/* Table Toolbar */}
+      <div className="flex items-center justify-end gap-2 p-2 bg-gray-50 border-b border-gray-200">
+        <button
+          onClick={handleToggleFilters}
+          className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium border rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+            showFilters 
+              ? 'bg-blue-50 border-blue-300 text-blue-700' 
+              : 'bg-white border-gray-300 text-gray-700'
+          }`}
+          title="Toggle Advanced Filters"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
+          </svg>
+          Filters
+          {activeFilters.length > 0 && (
+            <span className="ml-1 bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 rounded-full">
+              {activeFilters.length}
+            </span>
+          )}
+        </button>
+        
+        <button
+          onClick={handleOpenColumnManager}
+          className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          title="Manage Columns"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+          </svg>
+          Columns
+        </button>
+      </div>
+
+      {/* Advanced Filters Row */}
+      {showFilters && (
+        <FilterRow
+          columns={columnDefinitions}
+          data={cables}
+          onFiltersChange={handleFiltersChange}
+        />
+      )}
+
       {/* AG-Grid Table - fills all available space */}
       <div className="flex-1 ag-theme-quartz">
         <AgGridReact
           rowData={filteredCables}
-          columnDefs={columnDefs}
+          columnDefs={dynamicColumnDefs.length > 0 ? dynamicColumnDefs : columnDefs}
           defaultColDef={defaultColDef}
           onGridReady={onGridReady}
           onCellValueChanged={onCellValueChanged}
@@ -622,6 +772,14 @@ const CableTable: React.FC<CableTableProps> = ({
         selectedCables={cables.filter(cable => cable.id && selectedCables.includes(cable.id))}
         allCables={cables}
         isLoading={false}
+      />
+
+      {/* Column Manager Modal */}
+      <ColumnManagerModal
+        isOpen={showColumnManager}
+        onClose={handleCloseColumnManager}
+        onApply={handleApplyColumns}
+        currentColumns={columnDefinitions}
       />
     </div>
   );

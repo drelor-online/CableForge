@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-interface ColumnDefinition {
-  field: string;
-  headerName: string;
-  visible: boolean;
-  pinned?: boolean;
-  width?: number;
-  category: 'core' | 'electrical' | 'physical' | 'routing' | 'metadata';
-  required?: boolean;
-}
+import { ColumnDefinition, defaultColumns, columnService } from '../../services/column-service';
 
 interface ColumnManagerModalProps {
   isOpen: boolean;
@@ -16,41 +7,6 @@ interface ColumnManagerModalProps {
   onApply: (columns: ColumnDefinition[]) => void;
   currentColumns: ColumnDefinition[];
 }
-
-const defaultColumns: ColumnDefinition[] = [
-  // Core fields (always visible)
-  { field: 'tag', headerName: 'Tag', visible: true, pinned: true, width: 120, category: 'core', required: true },
-  { field: 'description', headerName: 'Description', visible: true, width: 200, category: 'core' },
-  
-  // Electrical
-  { field: 'function', headerName: 'Function', visible: true, width: 120, category: 'electrical' },
-  { field: 'voltage', headerName: 'Voltage', visible: true, width: 100, category: 'electrical' },
-  { field: 'current', headerName: 'Current', visible: false, width: 100, category: 'electrical' },
-  { field: 'segregationClass', headerName: 'Segregation', visible: false, width: 120, category: 'electrical' },
-  
-  // Physical
-  { field: 'cableType', headerName: 'Cable Type', visible: true, width: 120, category: 'physical' },
-  { field: 'size', headerName: 'Size', visible: true, width: 100, category: 'physical' },
-  { field: 'cores', headerName: 'Cores', visible: true, width: 80, category: 'physical' },
-  { field: 'manufacturer', headerName: 'Manufacturer', visible: false, width: 140, category: 'physical' },
-  { field: 'partNumber', headerName: 'Part Number', visible: false, width: 140, category: 'physical' },
-  { field: 'outerDiameter', headerName: 'OD (mm)', visible: false, width: 100, category: 'physical' },
-  
-  // Routing
-  { field: 'fromLocation', headerName: 'From Location', visible: false, width: 140, category: 'routing' },
-  { field: 'fromEquipment', headerName: 'From Equipment', visible: true, width: 140, category: 'routing' },
-  { field: 'toLocation', headerName: 'To Location', visible: false, width: 140, category: 'routing' },
-  { field: 'toEquipment', headerName: 'To Equipment', visible: true, width: 140, category: 'routing' },
-  { field: 'route', headerName: 'Route', visible: true, width: 100, category: 'routing' },
-  { field: 'length', headerName: 'Length', visible: true, width: 100, category: 'routing' },
-  { field: 'sparePercentage', headerName: 'Spare %', visible: false, width: 100, category: 'routing' },
-  { field: 'calculatedLength', headerName: 'Calc. Length', visible: false, width: 120, category: 'routing' },
-  
-  // Metadata
-  { field: 'notes', headerName: 'Notes', visible: false, width: 200, category: 'metadata' },
-  { field: 'voltageDropPercentage', headerName: 'Voltage Drop %', visible: false, width: 130, category: 'metadata' },
-  { field: 'segregationWarning', headerName: 'Segregation Warning', visible: false, width: 160, category: 'metadata' },
-];
 
 const categoryLabels = {
   core: 'Core Information',
@@ -140,10 +96,13 @@ const ColumnManagerModal: React.FC<ColumnManagerModalProps> = ({
   };
 
   const handleReset = () => {
-    setColumns(defaultColumns);
+    const resetColumns = columnService.resetToDefaults();
+    setColumns(resetColumns);
   };
 
   const handleApply = () => {
+    // Save settings and apply
+    columnService.saveColumnSettings(columns);
     onApply(columns);
     onClose();
   };

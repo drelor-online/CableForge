@@ -6,12 +6,15 @@ import BulkEditModal from './components/modals/BulkEditModal';
 import CableLibraryModal from './components/modals/CableLibraryModal';
 import AutoNumberingModal from './components/modals/AutoNumberingModal';
 import FindReplaceModal from './components/modals/FindReplaceModal';
+import ExportBuilderModal from './components/modals/ExportBuilderModal';
+import ImportWizardModal from './components/modals/ImportWizardModal';
 import { useAppStore } from './stores/useAppStore';
 import { useDatabaseStore } from './stores/useDatabaseStore';
 import { validationService } from './services/validation-service';
 import { useUI } from './contexts/UIContext';
 import { Cable, CableTypeLibrary } from './types';
 import { AutoNumberingSettings } from './types/settings';
+import { columnService } from './services/column-service';
 
 function App() {
   const { showSuccess, showError, showInfo } = useUI();
@@ -72,6 +75,8 @@ function App() {
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [showAutoNumberingModal, setShowAutoNumberingModal] = useState(false);
   const [showFindReplaceModal, setShowFindReplaceModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // Initialize database on mount
   useEffect(() => {
@@ -197,8 +202,8 @@ function App() {
   }, []);
 
   const handleExport = useCallback(() => {
-    console.log('handleExport: Export functionality to be implemented');
-    // TODO: Implement export functionality
+    console.log('handleExport: Opening export modal');
+    setShowExportModal(true);
   }, []);
 
   const handleFiltersChange = useCallback((filters: {
@@ -288,6 +293,32 @@ function App() {
   const handleCloseFindReplace = useCallback(() => {
     setShowFindReplaceModal(false);
   }, []);
+
+  const handleCloseExport = useCallback(() => {
+    setShowExportModal(false);
+  }, []);
+
+  const handleImport = useCallback(() => {
+    console.log('handleImport: Opening import modal');
+    setShowImportModal(true);
+  }, []);
+
+  const handleCloseImport = useCallback(() => {
+    setShowImportModal(false);
+  }, []);
+
+  const handleImportCables = useCallback(async (cables: Partial<Cable>[]) => {
+    console.log('handleImportCables: Importing cables:', cables);
+    try {
+      // Add each cable to the database
+      const promises = cables.map(cableData => addCable(cableData));
+      await Promise.all(promises);
+      showSuccess(`${cables.length} cable${cables.length !== 1 ? 's' : ''} imported successfully!`);
+    } catch (error) {
+      console.error('handleImportCables: Failed to import cables:', error);
+      throw error;
+    }
+  }, [addCable, showSuccess]);
 
   const handleFindReplace = useCallback(async (updates: { cableId: number; field: string; newValue: string }[]) => {
     console.log('handleFindReplace: Applying updates:', updates);
@@ -430,6 +461,7 @@ function App() {
         appState={{ project, activeTab, isLoading, saveStatus, lastSaved }}
         onTabChange={handleTabChange}
         onExport={handleExport}
+        onImport={handleImport}
         currentViewStats={currentViewStats}
         projectTotals={projectTotals}
         validationCounts={validationCounts}
@@ -476,6 +508,22 @@ function App() {
         onReplace={handleFindReplace}
         cables={cables}
         isLoading={isLoading}
+      />
+
+      <ExportBuilderModal
+        isOpen={showExportModal}
+        onClose={handleCloseExport}
+        data={cables}
+        columns={columnService.loadColumnSettings()}
+        selectedRowIds={selectedCables.map(id => String(id))}
+      />
+
+      <ImportWizardModal
+        isOpen={showImportModal}
+        onClose={handleCloseImport}
+        onImport={handleImportCables}
+        columns={columnService.loadColumnSettings()}
+        existingCables={cables}
       />
     </>
   );

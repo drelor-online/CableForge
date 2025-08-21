@@ -8,6 +8,7 @@ interface AppShellProps {
   appState: AppState;
   onTabChange: (tab: AppState['activeTab']) => void;
   onExport: () => void;
+  onImport?: () => void;
   children: React.ReactNode;
   // Add optional data for GridFooter
   currentViewStats?: {
@@ -45,6 +46,7 @@ const AppShell: React.FC<AppShellProps> = ({
   appState,
   onTabChange,
   onExport,
+  onImport,
   children,
   currentViewStats,
   projectTotals,
@@ -100,6 +102,7 @@ const AppShell: React.FC<AppShellProps> = ({
         onTabChange={onTabChange}
         validationCounts={validationCounts}
         onExport={onExport}
+        onImport={onImport}
         onOpenAutoNumbering={onOpenAutoNumbering}
         onOpenFindReplace={onOpenFindReplace}
       />

@@ -1,0 +1,442 @@
+import React, { useState, useMemo } from 'react';
+import { Cable } from '../../types';
+import { ColumnDefinition } from '../../services/column-service';
+import { ExportOptions, ExportPreset, exportService } from '../../services/export-service';
+
+interface ExportBuilderModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  data: Cable[];
+  columns: ColumnDefinition[];
+  selectedRowIds?: string[];
+}
+
+const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
+  isOpen,
+  onClose,
+  data,
+  columns,
+  selectedRowIds = []
+}) => {
+  const [format, setFormat] = useState<'xlsx' | 'csv'>('xlsx');
+  const [filename, setFilename] = useState('');
+  const [includeHidden, setIncludeHidden] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+  const [exportScope, setExportScope] = useState<'all' | 'visible' | 'selected'>('visible');
+  const [sheetName, setSheetName] = useState('Cables');
+  const [showPresets, setShowPresets] = useState(false);
+  const [presetName, setPresetName] = useState('');
+  const [presetDescription, setPresetDescription] = useState('');
+
+  const exportPresets = exportService.getExportPresets();
+
+  // Get available columns based on visibility settings
+  const availableColumns = useMemo(() => {
+    return includeHidden ? columns : columns.filter(col => col.visible);
+  }, [columns, includeHidden]);
+
+  // Initialize selected columns when visibility changes
+  React.useEffect(() => {
+    if (selectedColumns.length === 0) {
+      setSelectedColumns(availableColumns.map(col => col.field));
+    }
+  }, [availableColumns]);
+
+  const handleColumnToggle = (field: string) => {
+    setSelectedColumns(prev => 
+      prev.includes(field) 
+        ? prev.filter(f => f !== field)
+        : [...prev, field]
+    );
+  };
+
+  const handleSelectAllColumns = () => {
+    setSelectedColumns(availableColumns.map(col => col.field));
+  };
+
+  const handleDeselectAllColumns = () => {
+    setSelectedColumns([]);
+  };
+
+  const handleExport = () => {
+    const exportOptions: ExportOptions = {
+      format,
+      filename: filename.trim() || undefined,
+      includeHidden,
+      selectedColumns: selectedColumns.length > 0 ? selectedColumns : undefined,
+      selectedRows: exportScope === 'selected' ? selectedRowIds : undefined,
+      sheetName: format === 'xlsx' ? sheetName : undefined
+    };
+
+    exportService.exportData(data, columns, exportOptions);
+    onClose();
+  };
+
+  const handleQuickExport = (type: 'all' | 'selected' | 'csv') => {
+    switch (type) {
+      case 'all':
+        exportService.exportAllData(data, columns);
+        break;
+      case 'selected':
+        if (selectedRowIds.length > 0) {
+          exportService.exportSelectedData(data, columns, selectedRowIds);
+        }
+        break;
+      case 'csv':
+        exportService.exportData(data, columns, { format: 'csv', includeHidden: false });
+        break;
+    }
+    onClose();
+  };
+
+  const handleSavePreset = () => {
+    if (!presetName.trim()) return;
+
+    const exportOptions: ExportOptions = {
+      format,
+      includeHidden,
+      selectedColumns: selectedColumns.length > 0 ? selectedColumns : undefined,
+      sheetName: format === 'xlsx' ? sheetName : undefined
+    };
+
+    exportService.saveExportPreset({
+      name: presetName.trim(),
+      description: presetDescription.trim() || undefined,
+      options: exportOptions
+    });
+
+    setPresetName('');
+    setPresetDescription('');
+    setShowPresets(false);
+  };
+
+  const handleLoadPreset = (preset: ExportPreset) => {
+    const options = preset.options;
+    setFormat(options.format);
+    setIncludeHidden(options.includeHidden || false);
+    setSelectedColumns(options.selectedColumns || availableColumns.map(col => col.field));
+    setSheetName(options.sheetName || 'Cables');
+  };
+
+  const getRowCountText = () => {
+    const totalRows = data.length;
+    const selectedRows = selectedRowIds.length;
+    
+    switch (exportScope) {
+      case 'all':
+        return `All ${totalRows} cables`;
+      case 'selected':
+        return `${selectedRows} selected cables`;
+      case 'visible':
+      default:
+        return `All ${totalRows} visible cables`;
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">Export Builder</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex h-[600px]">
+          {/* Left Panel - Quick Actions */}
+          <div className="w-1/3 p-6 border-r border-gray-200 bg-gray-50">
+            <h3 className="font-medium text-gray-900 mb-4">Quick Export</h3>
+            
+            <div className="space-y-3">
+              <button
+                onClick={() => handleQuickExport('all')}
+                className="w-full px-4 py-3 text-left bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-3"
+              >
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <div>
+                  <div className="font-medium">Export All to Excel</div>
+                  <div className="text-sm text-gray-500">{data.length} cables</div>
+                </div>
+              </button>
+
+              {selectedRowIds.length > 0 && (
+                <button
+                  onClick={() => handleQuickExport('selected')}
+                  className="w-full px-4 py-3 text-left bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-3"
+                >
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  <div>
+                    <div className="font-medium">Export Selected to Excel</div>
+                    <div className="text-sm text-gray-500">{selectedRowIds.length} cables</div>
+                  </div>
+                </button>
+              )}
+
+              <button
+                onClick={() => handleQuickExport('csv')}
+                className="w-full px-4 py-3 text-left bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-3"
+              >
+                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <div>
+                  <div className="font-medium">Export to CSV</div>
+                  <div className="text-sm text-gray-500">Visible columns only</div>
+                </div>
+              </button>
+            </div>
+
+            {/* Preset Management */}
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-medium text-gray-900">Export Presets</h4>
+                <button
+                  onClick={() => setShowPresets(!showPresets)}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  {showPresets ? 'Hide' : 'Show'}
+                </button>
+              </div>
+
+              {showPresets && (
+                <div className="space-y-2">
+                  {exportPresets.map(preset => (
+                    <div key={preset.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{preset.name}</div>
+                        {preset.description && (
+                          <div className="text-xs text-gray-500">{preset.description}</div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleLoadPreset(preset)}
+                        className="text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        Load
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {exportPresets.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-4">No presets saved</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Panel - Custom Export */}
+          <div className="flex-1 p-6 overflow-y-auto">
+            <h3 className="font-medium text-gray-900 mb-4">Custom Export</h3>
+
+            <div className="space-y-6">
+              {/* Format Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Export Format
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value="xlsx"
+                      checked={format === 'xlsx'}
+                      onChange={(e) => setFormat(e.target.value as 'xlsx')}
+                      className="mr-2"
+                    />
+                    Excel (.xlsx)
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value="csv"
+                      checked={format === 'csv'}
+                      onChange={(e) => setFormat(e.target.value as 'csv')}
+                      className="mr-2"
+                    />
+                    CSV (.csv)
+                  </label>
+                </div>
+              </div>
+
+              {/* Filename */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Filename (optional)
+                </label>
+                <input
+                  type="text"
+                  value={filename}
+                  onChange={(e) => setFilename(e.target.value)}
+                  placeholder="Leave empty for auto-generated name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Sheet Name (Excel only) */}
+              {format === 'xlsx' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Sheet Name
+                  </label>
+                  <input
+                    type="text"
+                    value={sheetName}
+                    onChange={(e) => setSheetName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+
+              {/* Data Scope */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Data to Export ({getRowCountText()})
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      value="visible"
+                      checked={exportScope === 'visible'}
+                      onChange={(e) => setExportScope(e.target.value as 'visible')}
+                      className="mr-2"
+                    />
+                    All visible data
+                  </label>
+                  {selectedRowIds.length > 0 && (
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="selected"
+                        checked={exportScope === 'selected'}
+                        onChange={(e) => setExportScope(e.target.value as 'selected')}
+                        className="mr-2"
+                      />
+                      Selected rows only ({selectedRowIds.length} cables)
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Column Options */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Columns to Export
+                  </label>
+                  <label className="flex items-center text-sm">
+                    <input
+                      type="checkbox"
+                      checked={includeHidden}
+                      onChange={(e) => setIncludeHidden(e.target.checked)}
+                      className="mr-1"
+                    />
+                    Include hidden columns
+                  </label>
+                </div>
+
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={handleSelectAllColumns}
+                    className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={handleDeselectAllColumns}
+                    className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded p-3 bg-gray-50">
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableColumns.map(column => (
+                      <label key={column.field} className="flex items-center text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedColumns.includes(column.field)}
+                          onChange={() => handleColumnToggle(column.field)}
+                          className="mr-2"
+                        />
+                        <span className="truncate">{column.headerName}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="text-sm text-gray-500 mt-2">
+                  {selectedColumns.length} of {availableColumns.length} columns selected
+                </div>
+              </div>
+
+              {/* Save Preset */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">Save as Preset</span>
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    placeholder="Preset name"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <input
+                    type="text"
+                    value={presetDescription}
+                    onChange={(e) => setPresetDescription(e.target.value)}
+                    placeholder="Description (optional)"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={handleSavePreset}
+                    disabled={!presetName.trim()}
+                    className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Save Preset
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={selectedColumns.length === 0}
+            className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Export ({selectedColumns.length} columns)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ExportBuilderModal;
