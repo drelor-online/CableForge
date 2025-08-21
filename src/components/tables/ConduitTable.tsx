@@ -231,6 +231,7 @@ const ConduitTable: React.FC<ConduitTableProps> = ({
           'PVC': 'bg-green-100 text-green-800',
           'LFNC': 'bg-yellow-100 text-yellow-800',
           'FMC': 'bg-orange-100 text-orange-800',
+          'Rigid Steel': 'bg-red-100 text-red-800',
           'Cable Run': 'bg-indigo-100 text-indigo-800',
           'Cable Ladder': 'bg-pink-100 text-pink-800',
           'Cable Tray': 'bg-teal-100 text-teal-800'
@@ -641,7 +642,6 @@ const ConduitTable: React.FC<ConduitTableProps> = ({
           suppressRowClickSelection={true}
           onGridReady={onGridReady}
           onCellValueChanged={handleRowValueChanged}
-          onRowValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
           getRowId={(params) => params.data.id?.toString() || params.data.tag || Math.random().toString()}
           headerHeight={32}

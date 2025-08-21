@@ -33,7 +33,7 @@ export interface RevisionChange {
   entityType: string; // 'cable', 'io_point', 'load', 'conduit', 'tray'
   entityId: number;
   entityTag?: string;
-  changeType: string; // 'create', 'update', 'delete'
+  changeType: 'create' | 'update' | 'delete';
   fieldName?: string; // null for create/delete
   oldValue?: string;
   newValue?: string;

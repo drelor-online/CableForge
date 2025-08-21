@@ -28,7 +28,7 @@ export const EditTrayModal: React.FC<EditTrayModalProps> = ({
     type: undefined,
     width: undefined,
     height: undefined,
-    depth: undefined,
+    length: undefined,
     material: undefined,
     fromLocation: '',
     toLocation: '',
@@ -48,7 +48,7 @@ export const EditTrayModal: React.FC<EditTrayModalProps> = ({
         type: tray.type,
         width: tray.width,
         height: tray.height,
-        depth: tray.depth,
+        length: tray.length,
         material: tray.material,
         fromLocation: tray.fromLocation || '',
         toLocation: tray.toLocation || '',
@@ -69,7 +69,7 @@ export const EditTrayModal: React.FC<EditTrayModalProps> = ({
         formData.type !== tray.type ||
         formData.width !== tray.width ||
         formData.height !== tray.height ||
-        formData.depth !== tray.depth ||
+        formData.length !== tray.length ||
         formData.material !== tray.material ||
         formData.fromLocation !== (tray.fromLocation || '') ||
         formData.toLocation !== (tray.toLocation || '') ||
@@ -112,8 +112,8 @@ export const EditTrayModal: React.FC<EditTrayModalProps> = ({
     if (formData.height !== undefined && formData.height <= 0) {
       newErrors.height = 'Height must be positive';
     }
-    if (formData.depth !== undefined && formData.depth <= 0) {
-      newErrors.depth = 'Depth must be positive';
+    if (formData.length !== undefined && formData.length <= 0) {
+      newErrors.length = 'Length must be positive';
     }
 
     setErrors(newErrors);
@@ -136,7 +136,7 @@ export const EditTrayModal: React.FC<EditTrayModalProps> = ({
         type: formData.type,
         width: formData.width,
         height: formData.height,
-        depth: formData.depth,
+        length: formData.length,
         material: formData.material,
         fromLocation: formData.fromLocation?.trim() || undefined,
         toLocation: formData.toLocation?.trim() || undefined,
@@ -156,7 +156,7 @@ export const EditTrayModal: React.FC<EditTrayModalProps> = ({
 
   const handleClose = useCallback(() => {
     if (hasChanges) {
-      if (confirm('You have unsaved changes. Are you sure you want to close?')) {
+      if (window.confirm('You have unsaved changes. Are you sure you want to close?')) {
         onClose();
       }
     } else {
@@ -335,16 +335,16 @@ export const EditTrayModal: React.FC<EditTrayModalProps> = ({
                     <input
                       type="number"
                       step="1"
-                      value={formData.depth || ''}
-                      onChange={(e) => handleInputChange('depth', e.target.value ? parseInt(e.target.value) : undefined)}
+                      value={formData.length || ''}
+                      onChange={(e) => handleInputChange('length', e.target.value ? parseInt(e.target.value) : undefined)}
                       className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
-                        errors.depth ? 'border-red-300' : 'border-gray-300'
+                        errors.length ? 'border-red-300' : 'border-gray-300'
                       }`}
                       placeholder="e.g., 50"
                       disabled={isSubmitting}
                     />
-                    {errors.depth && (
-                      <p className="mt-1 text-sm text-red-600">{errors.depth}</p>
+                    {errors.length && (
+                      <p className="mt-1 text-sm text-red-600">{errors.length}</p>
                     )}
                   </div>
                 </div>

@@ -34,6 +34,22 @@ const TrayTable: React.FC<TrayTableProps> = ({
 }) => {
   const { showConfirm, showSuccess, showError } = useUI();
   
+  // Handle fill recalculation for a specific tray
+  const handleRecalculateFill = useCallback(async (tray: Tray) => {
+    if (!tray.id) return;
+
+    try {
+      const fillPercentage = await fillCalculationService.recalculateTrayFill(tray.id);
+      
+      // Update the tray with new fill percentage
+      onTrayUpdate(tray.id, { fillPercentage });
+      
+      showSuccess(`Fill recalculated for tray ${tray.tag}: ${fillPercentage.toFixed(1)}%`);
+    } catch (error) {
+      showError(`Failed to recalculate fill for tray ${tray.tag}: ${error}`);
+    }
+  }, [onTrayUpdate, showSuccess, showError]);
+  
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredTrays, setFilteredTrays] = useState<Tray[]>([]);
@@ -223,22 +239,6 @@ const TrayTable: React.FC<TrayTableProps> = ({
     }
   }, [trays, onTrayDelete, showConfirm, showSuccess, showError]);
 
-  // Handle fill recalculation for a specific tray
-  const handleRecalculateFill = useCallback(async (tray: Tray) => {
-    if (!tray.id) return;
-
-    try {
-      const fillPercentage = await fillCalculationService.recalculateTrayFill(tray.id);
-      
-      // Update the tray with new fill percentage
-      onTrayUpdate(tray.id, { fillPercentage });
-      
-      showSuccess(`Fill recalculated for tray ${tray.tag}: ${fillPercentage.toFixed(1)}%`);
-    } catch (error) {
-      showError(`Failed to recalculate fill for tray ${tray.tag}: ${error}`);
-    }
-  }, [onTrayUpdate, showSuccess, showError]);
-
   // Handle batch fill recalculation for all trays
   const handleRecalculateAllFills = useCallback(async () => {
     try {
@@ -427,7 +427,9 @@ const TrayTable: React.FC<TrayTableProps> = ({
         );
       }
       
-      await onTrayUpdate(tray.id, { [field]: newValue });
+      if (tray.id) {
+        await onTrayUpdate(tray.id, { [field]: newValue });
+      }
       showSuccess(`Tray ${tray.tag} updated successfully`);
     } catch (error) {
       showError(`Failed to update tray: ${error}`);
@@ -759,7 +761,6 @@ const TrayTable: React.FC<TrayTableProps> = ({
           columnDefs={columnDefinitions}
           onGridReady={onGridReady}
           onCellValueChanged={handleRowValueChanged}
-          onRowValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
           rowSelection="multiple"
           suppressRowClickSelection={true}

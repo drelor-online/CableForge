@@ -844,7 +844,6 @@ const IOTable: React.FC<IOTableProps> = ({
           defaultColDef={defaultColDef}
           onGridReady={onGridReady}
           onCellValueChanged={handleRowValueChanged}
-          onRowValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
           rowSelection="multiple"
           suppressRowClickSelection={true}

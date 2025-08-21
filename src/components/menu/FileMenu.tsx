@@ -2,10 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { FolderPlus, FolderOpen, Save, FileDown, ClipboardList, Upload, Download } from 'lucide-react';
 
 interface FileMenuProps {
-  onNewProject: () => void;
-  onSaveProject: () => void;
-  onSaveProjectAs: () => void;
-  onOpenProject: () => void;
+  onNewProject?: () => void;
+  onSaveProject?: () => void;
+  onSaveProjectAs?: () => void;
+  onOpenProject?: () => void;
   onSaveAsTemplate?: () => void;
   onImportProject?: () => void;
   onExportProject?: () => void;
@@ -39,8 +39,10 @@ export const FileMenu: React.FC<FileMenuProps> = ({
     }
   }, [isOpen]);
 
-  const handleMenuClick = (action: () => void) => {
-    action();
+  const handleMenuClick = (action?: () => void) => {
+    if (action) {
+      action();
+    }
     setIsOpen(false);
   };
 

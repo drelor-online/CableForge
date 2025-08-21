@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { CableTypeLibrary, Cable, CableFunction, SegregationClass } from '../../types';
 import { useUI } from '../../contexts/UIContext';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { 
   X,
   Search,
@@ -45,7 +45,7 @@ interface NewCableLibraryItem {
   part_number?: string;
   cable_type: string;
   size: string;
-  cores: number;
+  cores?: number;
   voltage_rating?: number;
   current_rating?: number;
   outer_diameter?: number;
@@ -96,7 +96,7 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
     part_number: '',
     cable_type: '',
     size: '',
-    cores: 1,
+    cores: undefined,
     voltage_rating: undefined,
     current_rating: undefined,
     outer_diameter: undefined,
@@ -165,15 +165,19 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
 
     try {
       // TODO: Implement save to database
-      const libraryItem: CableTypeLibrary = {
+      const libraryItem: CableLibraryItem = {
         ...newItem,
-        name: newItem.name!,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      } as CableTypeLibrary;
+        id: Math.max(...library.map(i => i.id || 0)) + 1,
+        cores: newItem.cores || 1,
+        conductor_material: newItem.conductor_material as 'Copper' | 'Aluminum',
+        category: newItem.category as 'Power' | 'Control' | 'Instrumentation' | 'Communication' | 'Fiber Optic',
+        is_active: newItem.is_active ?? true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
 
       // Add to local library for now
-      setLibrary(prev => [...prev, { ...libraryItem, id: Math.max(...prev.map(i => i.id || 0)) + 1 }]);
+      setLibrary(prev => [...prev, libraryItem]);
       
       showSuccess(`Saved ${newItem.name} to library`);
       
@@ -181,17 +185,18 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
       setNewItem({
         name: '',
         manufacturer: '',
-        partNumber: '',
+        part_number: '',
         description: '',
-        voltageRating: undefined,
+        voltage_rating: undefined,
         cores: undefined,
         size: '',
-        cableType: '',
-        outerDiameter: undefined,
-        weight: undefined,
-        temperatureRating: undefined,
-        isArmored: false,
-        isShielded: false
+        cable_type: '',
+        outer_diameter: undefined,
+        weight_per_meter: undefined,
+        temperature_rating: undefined,
+        conductor_material: 'Copper',
+        category: 'Power',
+        is_active: true
       });
       
       setActiveTab('browse');
@@ -291,19 +296,19 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="font-medium text-gray-900">{item.name}</h3>
-                            {item.isArmored && <span className="text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded">Armored</span>}
-                            {item.isShielded && <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Shielded</span>}
+                            {item.armor && <span className="text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded">{item.armor}</span>}
+                            {item.shielding && <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">{item.shielding}</span>}
                           </div>
                           <p className="text-sm text-gray-600 mb-2">{item.description}</p>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-500">
                             <div><span className="font-medium">Size:</span> {item.size}</div>
                             <div><span className="font-medium">Cores:</span> {item.cores}</div>
-                            <div><span className="font-medium">Voltage:</span> {item.voltageRating}V</div>
-                            <div><span className="font-medium">Temp:</span> {item.temperatureRating}°C</div>
+                            <div><span className="font-medium">Voltage:</span> {item.voltage_rating}V</div>
+                            <div><span className="font-medium">Temp:</span> {item.temperature_rating}°C</div>
                           </div>
                           <div className="mt-2 text-xs text-gray-500">
                             <span className="font-medium">Manufacturer:</span> {item.manufacturer} | 
-                            <span className="ml-1 font-medium">Part #:</span> {item.partNumber}
+                            <span className="ml-1 font-medium">Part #:</span> {item.part_number}
                           </div>
                         </div>
                         <div className="ml-4">
@@ -353,8 +358,8 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
                   <label className={labelClass}>Part Number</label>
                   <input
                     type="text"
-                    value={newItem.partNumber || ''}
-                    onChange={e => setNewItem(prev => ({ ...prev, partNumber: e.target.value }))}
+                    value={newItem.part_number || ''}
+                    onChange={e => setNewItem(prev => ({ ...prev, part_number: e.target.value }))}
                     className={inputClass}
                     placeholder="e.g., T90-12-3C"
                   />
@@ -365,8 +370,8 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
                   <label className={labelClass}>Cable Type</label>
                   <input
                     type="text"
-                    value={newItem.cableType || ''}
-                    onChange={e => setNewItem(prev => ({ ...prev, cableType: e.target.value }))}
+                    value={newItem.cable_type || ''}
+                    onChange={e => setNewItem(prev => ({ ...prev, cable_type: e.target.value }))}
                     className={inputClass}
                     placeholder="e.g., TECK90, THWN-2"
                   />
@@ -389,8 +394,8 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
                   <label className={labelClass}>Voltage Rating (V)</label>
                   <input
                     type="number"
-                    value={newItem.voltageRating || ''}
-                    onChange={e => setNewItem(prev => ({ ...prev, voltageRating: e.target.value ? Number(e.target.value) : undefined }))}
+                    value={newItem.voltage_rating || ''}
+                    onChange={e => setNewItem(prev => ({ ...prev, voltage_rating: e.target.value ? Number(e.target.value) : undefined }))}
                     className={inputClass}
                     placeholder="e.g., 600"
                   />
@@ -424,8 +429,8 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={newItem.isArmored || false}
-                      onChange={e => setNewItem(prev => ({ ...prev, isArmored: e.target.checked }))}
+                      checked={false}
+                      onChange={() => {}}
                       className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                     />
                     <span className="text-sm text-gray-700">Armored</span>
@@ -433,8 +438,8 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={newItem.isShielded || false}
-                      onChange={e => setNewItem(prev => ({ ...prev, isShielded: e.target.checked }))}
+                      checked={false}
+                      onChange={() => {}}
                       className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                     />
                     <span className="text-sm text-gray-700">Shielded</span>

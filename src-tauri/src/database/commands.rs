@@ -172,7 +172,7 @@ impl Database {
             "SELECT id, project_id, revision_id, tag, description, function, voltage, current, cable_type, size, cores,
              segregation_class, from_location, from_equipment, to_location, to_equipment, length, 
              spare_percentage, calculated_length, route, manufacturer, part_number, outer_diameter,
-             voltage_drop_percentage, segregation_warning, notes, created_at, updated_at
+             voltage_drop_percentage, segregation_warning, tray_id, conduit_id, notes, created_at, updated_at
              FROM cables WHERE project_id = ?1 ORDER BY tag"
         )?;
 
@@ -203,10 +203,12 @@ impl Database {
                 outer_diameter: row.get(22)?,
                 voltage_drop_percentage: row.get(23)?,
                 segregation_warning: row.get::<_, i32>(24)? != 0,
-                notes: row.get(25)?,
-                created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(26)?)
+                tray_id: row.get(25)?,
+                conduit_id: row.get(26)?,
+                notes: row.get(27)?,
+                created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(28)?)
                     .unwrap().with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(27)?)
+                updated_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(29)?)
                     .unwrap().with_timezone(&Utc),
             })
         })?;
@@ -223,7 +225,7 @@ impl Database {
             "SELECT id, project_id, revision_id, tag, description, function, voltage, current, cable_type, size, cores,
              segregation_class, from_location, from_equipment, to_location, to_equipment, length, 
              spare_percentage, calculated_length, route, manufacturer, part_number, outer_diameter,
-             voltage_drop_percentage, segregation_warning, notes, created_at, updated_at
+             voltage_drop_percentage, segregation_warning, tray_id, conduit_id, notes, created_at, updated_at
              FROM cables WHERE id = ?1"
         )?;
 
@@ -254,10 +256,12 @@ impl Database {
                 outer_diameter: row.get(22)?,
                 voltage_drop_percentage: row.get(23)?,
                 segregation_warning: row.get::<_, i32>(24)? != 0,
-                notes: row.get(25)?,
-                created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(26)?)
+                tray_id: row.get(25)?,
+                conduit_id: row.get(26)?,
+                notes: row.get(27)?,
+                created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(28)?)
                     .unwrap().with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(27)?)
+                updated_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(29)?)
                     .unwrap().with_timezone(&Utc),
             })
         })
@@ -1280,8 +1284,8 @@ impl Database {
 
         let mut stmt = self.connection.prepare(query)?;
         
-        let revision_iter = match limit {
-            Some(l) => stmt.query_map(params![project_id, l], |row| {
+        let revision_iter: Box<dyn Iterator<Item = rusqlite::Result<RevisionSummary>>> = match limit {
+            Some(l) => Box::new(stmt.query_map(params![project_id, l], |row| {
                 Ok(RevisionSummary {
                     id: row.get(0)?,
                     major_revision: row.get(1)?,
@@ -1294,8 +1298,8 @@ impl Database {
                     created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(8)?)
                         .unwrap().with_timezone(&Utc),
                 })
-            })?,
-            None => stmt.query_map([project_id], |row| {
+            })?),
+            None => Box::new(stmt.query_map([project_id], |row| {
                 Ok(RevisionSummary {
                     id: row.get(0)?,
                     major_revision: row.get(1)?,
@@ -1308,7 +1312,7 @@ impl Database {
                     created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(8)?)
                         .unwrap().with_timezone(&Utc),
                 })
-            })?
+            })?),
         };
 
         let mut revisions = Vec::new();
@@ -1507,17 +1511,17 @@ impl Database {
                           datasheet_url, cost_per_meter, is_active, created_at, updated_at 
                           FROM cable_library WHERE is_active = 1";
         
-        let mut conditions = Vec::new();
+        let mut conditions: Vec<String> = Vec::new();
         let mut params_vec = Vec::new();
         
         if let Some(search) = &search_term {
-            conditions.push("(name LIKE ?1 OR manufacturer LIKE ?1 OR part_number LIKE ?1 OR description LIKE ?1)");
+            conditions.push("(name LIKE ?1 OR manufacturer LIKE ?1 OR part_number LIKE ?1 OR description LIKE ?1)".to_string());
             params_vec.push(format!("%{}%", search));
         }
         
         if let Some(cat) = &category {
             let param_index = params_vec.len() + 1;
-            conditions.push(&format!("category = ?{}", param_index));
+            conditions.push(format!("category = ?{}", param_index));
             params_vec.push(cat.clone());
         }
         
@@ -1754,7 +1758,7 @@ impl Database {
         );
         
         let params: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
-        self.connection.execute(&query, params.as_slice())?;
+        self.connection.execute(&query, &*params)?;
         
         // Return the updated item
         self.get_cable_library_item(id)
@@ -1845,6 +1849,6 @@ impl Database {
             notes: Some(format!("Imported from library: {}", library_item.name)),
         };
         
-        self.create_cable(project_id, revision_id, &new_cable)
+        self.insert_cable(project_id, &new_cable)
     }
 }

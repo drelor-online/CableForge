@@ -42,8 +42,28 @@ const RevisionComparisonModal: React.FC<RevisionComparisonModalProps> = ({
         revisionService.getRevisionChanges(revisionB),
       ]);
 
-      setRevisionDataA(dataA);
-      setRevisionDataB(dataB);
+      setRevisionDataA(dataA?.id ? {
+        id: dataA.id,
+        majorRevision: dataA.majorRevision,
+        minorRevision: dataA.minorRevision,
+        description: dataA.description,
+        isCheckpoint: dataA.isCheckpoint,
+        isAutoSave: dataA.isAutoSave,
+        userName: dataA.userName,
+        changeCount: dataA.changeCount,
+        createdAt: dataA.createdAt
+      } : null);
+      setRevisionDataB(dataB?.id ? {
+        id: dataB.id,
+        majorRevision: dataB.majorRevision,
+        minorRevision: dataB.minorRevision,
+        description: dataB.description,
+        isCheckpoint: dataB.isCheckpoint,
+        isAutoSave: dataB.isAutoSave,
+        userName: dataB.userName,
+        changeCount: dataB.changeCount,
+        createdAt: dataB.createdAt
+      } : null);
       setChangesA(changesAData);
       setChangesB(changesBData);
     } catch (error) {

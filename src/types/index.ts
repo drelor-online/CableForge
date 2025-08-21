@@ -5,6 +5,7 @@ export interface Project {
   name: string;
   description?: string;
   client?: string;
+  location?: string;
   engineer?: string;
   majorRevision: string;
   minorRevision: number;
@@ -64,13 +65,26 @@ export interface IOPoint {
   description?: string;
   signalType?: SignalType;
   ioType?: IOType;
+  type?: string;
+  function?: string;
   
   // PLC assignment
   plcName?: string;
   rack?: number;
   slot?: number;
   channel?: number;
+  plcSlot?: string;
+  plcPoint?: string;
   terminalBlock?: string;
+  
+  // Electrical properties
+  voltage?: number;
+  current?: number;
+  
+  // Location
+  location?: string;
+  cabinet?: string;
+  wireNumber?: string;
   
   // Relationships
   cableId?: number;
@@ -83,6 +97,7 @@ export interface IOPoint {
 export interface Conduit {
   id?: number;
   tag: string;
+  description?: string;
   revisionId: number;
   
   // Physical properties
@@ -104,6 +119,7 @@ export interface Conduit {
 export interface Tray {
   id?: number;
   tag: string;
+  description?: string;
   revisionId: number;
   
   // Physical properties
@@ -145,12 +161,14 @@ export interface Load {
   powerFactor?: number;
   efficiency?: number;
   demandFactor?: number;
+  startingCurrentMultiplier?: number;
   connectedLoadKw?: number;
   demandLoadKw?: number;
   cableId?: number;
   feederCable?: string;
   starterType?: string;
   protectionType?: string;
+  location?: string;
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -183,25 +201,6 @@ export enum ProtectionType {
   Combined = 'Combined'
 }
 
-export interface Revision {
-  id: number;
-  majorVersion: string;
-  minorVersion: number;
-  description?: string;
-  isCheckpoint: boolean;
-  createdAt: Date;
-}
-
-export interface RevisionChange {
-  id: number;
-  revisionId: number;
-  tableName: string;
-  recordId: number;
-  changeType: 'INSERT' | 'UPDATE' | 'DELETE';
-  oldValues?: Record<string, any>;
-  newValues?: Record<string, any>;
-  createdAt: Date;
-}
 
 // Enums
 export enum CableFunction {
@@ -248,6 +247,7 @@ export enum ConduitType {
   PVC = 'PVC',
   LFNC = 'LFNC',
   FMC = 'FMC',
+  RigidSteel = 'Rigid Steel',
   CableRun = 'Cable Run',
   CableLadder = 'Cable Ladder',
   CableTray = 'Cable Tray'
@@ -553,7 +553,7 @@ export interface TrayFormData {
   type?: TrayType;
   width?: number;
   height?: number;
-  depth?: number;
+  length?: number;
   material?: TrayMaterial;
   fromLocation?: string;
   toLocation?: string;
@@ -661,27 +661,27 @@ export interface CableLibraryItem {
   id?: number;
   name: string;
   manufacturer?: string;
-  partNumber?: string;
-  cableType: string;
+  part_number?: string;
+  cable_type: string;
   size: string;
   cores: number;
-  voltageRating?: number;
-  currentRating?: number;
-  outerDiameter?: number;
-  weightPerMeter?: number;
-  temperatureRating?: number;
-  conductorMaterial: 'Copper' | 'Aluminum';
-  insulationType?: string;
-  jacketMaterial?: string;
+  voltage_rating?: number;
+  current_rating?: number;
+  outer_diameter?: number;
+  weight_per_meter?: number;
+  temperature_rating?: number;
+  conductor_material: 'Copper' | 'Aluminum';
+  insulation_type?: string;
+  jacket_material?: string;
   shielding?: string;
   armor?: string;
-  fireRating?: string;
+  fire_rating?: string;
   category: 'Power' | 'Control' | 'Instrumentation' | 'Communication' | 'Fiber Optic';
   description?: string;
   specifications?: string;
-  datasheetUrl?: string;
-  costPerMeter?: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  datasheet_url?: string;
+  cost_per_meter?: number;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
 }

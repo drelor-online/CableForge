@@ -5,7 +5,7 @@ import { useUI } from '../../contexts/UIContext';
 interface BulkEditTrayModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (updates: Partial<Tray>) => Promise<void>;
+  onSave: (updates: Partial<Tray>, selectedFields: string[]) => Promise<void>;
   selectedTrays: Tray[];
   isLoading?: boolean;
 }
@@ -37,7 +37,7 @@ interface FieldUpdateState {
 export const BulkEditTrayModal: React.FC<BulkEditTrayModalProps> = ({
   isOpen,
   onClose,
-  onUpdate,
+  onSave,
   selectedTrays,
   isLoading = false
 }) => {
@@ -179,12 +179,12 @@ export const BulkEditTrayModal: React.FC<BulkEditTrayModalProps> = ({
         }
       });
 
-      await onUpdate(updates);
+      await onSave(updates, Object.keys(fieldsToUpdate).filter(key => fieldsToUpdate[key as keyof FieldUpdateState]));
       onClose();
     } catch (error) {
       showError(`Failed to update trays: ${error}`);
     }
-  }, [fieldsToUpdate, updateData, validateForm, onUpdate, onClose, showError]);
+  }, [fieldsToUpdate, updateData, validateForm, onSave, onClose, showError]);
 
   // Handle keyboard shortcuts
   useEffect(() => {

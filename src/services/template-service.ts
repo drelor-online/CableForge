@@ -1,4 +1,4 @@
-import { ProjectTemplate, ProjectTemplateData, CableLibraryItem, Project, Cable, IOPoint, Load, Conduit, Tray } from '../types';
+import { ProjectTemplate, ProjectTemplateData, CableLibraryItem, Project, Cable, IOPoint, Load, Conduit, Tray, CableFunction, ConduitType, TrayType } from '../types';
 import { TauriDatabaseService } from './tauri-database';
 
 export interface CreateTemplateOptions {
@@ -243,8 +243,8 @@ class TemplateService {
       const libraryItem: CableLibraryItem = {
         ...cable,
         id: Date.now(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        created_at: new Date(),
+        updated_at: new Date(),
       };
       return libraryItem;
     } catch (error) {
@@ -323,18 +323,18 @@ class TemplateService {
         },
         sampleData: {
           cables: [
-            { tag: 'PWR-001', description: 'Main Power Feeder', function: 'Power', voltage: 4160, cableType: 'XLPE', size: '500 MCM' },
-            { tag: 'CTL-001', description: 'Pump Control Cable', function: 'Control', voltage: 120, cableType: 'THWN', size: '12 AWG' },
+            { tag: 'PWR-001', description: 'Main Power Feeder', function: CableFunction.Power, voltage: 4160, cableType: 'XLPE', size: '500 MCM' },
+            { tag: 'CTL-001', description: 'Pump Control Cable', function: CableFunction.Control, voltage: 120, cableType: 'THWN', size: '12 AWG' },
           ],
           loads: [
             { tag: 'P-001', description: 'Main Process Pump', loadType: 'Motor', powerKw: 500, voltage: 4160 },
             { tag: 'FAN-001', description: 'Cooling Fan', loadType: 'Motor', powerKw: 25, voltage: 480 },
           ],
           conduits: [
-            { tag: 'C-001', type: 'Rigid Steel', size: '4"', maxFillPercentage: 40 },
+            { tag: 'C-001', type: ConduitType.RigidSteel, size: '4"', maxFillPercentage: 40 },
           ],
           trays: [
-            { tag: 'T-001', type: 'Ladder', width: 24, height: 4, maxFillPercentage: 50 },
+            { tag: 'T-001', type: TrayType.Ladder, width: 24, height: 4, maxFillPercentage: 50 },
           ],
           ioPoints: [],
         },

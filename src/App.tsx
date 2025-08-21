@@ -964,7 +964,7 @@ function App() {
   const handleCreateCheckpoint = useCallback(async () => {
     try {
       const description = prompt('Enter a description for this checkpoint (optional):');
-      await revisionService.createCheckpoint(description || undefined);
+      await revisionService.createCheckpoint(description ?? '');
       showSuccess('Checkpoint created successfully!');
       // Refresh revision history if it's open
       if (showRevisionHistory) {
@@ -1033,7 +1033,7 @@ function App() {
       const { project: projectData, data: templateData } = await templateService.createProjectFromTemplate(template, projectName);
       
       // Create new project in database
-      await newProject(projectData);
+      await newProject(projectData.name);
       
       // If template includes sample data, add it to the project
       if (templateData) {
@@ -1084,7 +1084,7 @@ function App() {
   const handleCreateFromScratch = useCallback(async (projectName: string) => {
     try {
       console.log('Creating empty project:', projectName);
-      await newProject({ name: projectName });
+      await newProject(projectName);
       setShowTemplateSelection(false);
       showSuccess(`Empty project "${projectName}" created`);
     } catch (error) {
@@ -1210,7 +1210,7 @@ function App() {
       case 'reports':
         return (
           <EngineeringDashboard
-            project={project}
+            project={project ?? undefined}
             cables={cables}
             trays={trays}
             conduits={conduits}

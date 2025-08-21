@@ -5,7 +5,7 @@ import { useUI } from '../../contexts/UIContext';
 interface BulkEditLoadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (updates: Partial<Load>) => Promise<void>;
+  onSave: (updates: Partial<Load>, selectedFields: string[]) => Promise<void>;
   selectedLoads: Load[];
   isLoading?: boolean;
 }
@@ -37,7 +37,7 @@ interface FieldUpdateState {
 export const BulkEditLoadModal: React.FC<BulkEditLoadModalProps> = ({
   isOpen,
   onClose,
-  onUpdate,
+  onSave,
   selectedLoads,
   isLoading = false
 }) => {
@@ -182,12 +182,12 @@ export const BulkEditLoadModal: React.FC<BulkEditLoadModalProps> = ({
         }
       });
 
-      await onUpdate(updates);
+      await onSave(updates, Object.keys(fieldsToUpdate).filter(key => fieldsToUpdate[key as keyof FieldUpdateState]));
       onClose();
     } catch (error) {
       showError(`Failed to update loads: ${error}`);
     }
-  }, [fieldsToUpdate, updateData, validateForm, onUpdate, onClose, showError]);
+  }, [fieldsToUpdate, updateData, validateForm, onSave, onClose, showError]);
 
   // Handle keyboard shortcuts
   useEffect(() => {

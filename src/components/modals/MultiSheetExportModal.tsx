@@ -211,6 +211,7 @@ const MultiSheetExportModal: React.FC<MultiSheetExportModalProps> = ({
       name: presetName,
       description: presetDescription,
       options: {
+        format: 'xlsx' as const,
         sheets,
         includeSummarySheet,
         includeValidationSheet,

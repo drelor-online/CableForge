@@ -47,7 +47,7 @@ export class ExcelFormatter {
       {
         field: 'segregationWarning',
         condition: 'equals',
-        value: true,
+        value: 'true',
         style: { backgroundColor: 'FFFFFF00' } // Yellow background
       }
     ]

@@ -371,7 +371,7 @@ export const useDatabaseStore = create<DatabaseStore>()(
                 // Use current from cable if available, otherwise estimate based on function
                 let current = updatedCable.current;
                 if (!current && updatedCable.function && updatedCable.size) {
-                  current = calculationService.estimateTypicalCurrent(updatedCable.function, updatedCable.size);
+                  current = calculationService.estimateTypicalCurrent(updatedCable.function, updatedCable.size) ?? undefined;
                 }
                 
                 if (current && current > 0) {

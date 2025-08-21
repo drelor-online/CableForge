@@ -1,11 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { IoPoint } from '../../types';
+import { IOPoint } from '../../types';
 
 interface BulkEditIOModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (updates: Partial<IoPoint>, selectedFields: string[]) => void;
-  selectedIOPoints: IoPoint[];
+  onSave: (updates: Partial<IOPoint>, selectedFields: string[]) => void;
+  selectedIOPoints: IOPoint[];
 }
 
 const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
@@ -15,7 +15,7 @@ const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
   selectedIOPoints,
 }) => {
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
-  const [formData, setFormData] = useState<Partial<IoPoint>>({});
+  const [formData, setFormData] = useState<Partial<IOPoint>>({});
 
   const handleFieldToggle = useCallback((field: string) => {
     setSelectedFields(prev => 
@@ -25,8 +25,8 @@ const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
     );
   }, []);
 
-  const handleInputChange = useCallback((field: keyof IoPoint, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = useCallback((field: keyof IOPoint, value: any) => {
+    setFormData((prev: any) => ({ ...prev, [field]: value }));
     if (!selectedFields.includes(field as string)) {
       setSelectedFields(prev => [...prev, field as string]);
     }
@@ -54,7 +54,7 @@ const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
       case 'increment-point':
         const maxPoint = Math.max(...selectedIOPoints.map(io => parseInt(io.plcPoint || '0') || 0));
         setSelectedFields(prev => [...prev.filter(f => f !== 'plcPoint'), 'plcPoint']);
-        setFormData(prev => ({ ...prev, plcPoint: (maxPoint + 1).toString() }));
+        setFormData((prev: any) => ({ ...prev, plcPoint: (maxPoint + 1).toString() }));
         break;
       case 'reset-tag':
         handleInputChange('tag', '');
@@ -75,14 +75,14 @@ const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
   const validationErrors: string[] = [];
   
   if (selectedFields.includes('voltage') && formData.voltage) {
-    const voltage = parseFloat(formData.voltage);
+    const voltage = parseFloat(String(formData.voltage));
     if (isNaN(voltage) || voltage <= 0 || voltage > 1000) {
       validationErrors.push('Voltage must be between 0 and 1000V');
     }
   }
 
   if (selectedFields.includes('current') && formData.current) {
-    const current = parseFloat(formData.current);
+    const current = parseFloat(String(formData.current));
     if (isNaN(current) || current < 0 || current > 100) {
       validationErrors.push('Current must be between 0 and 100A');
     }

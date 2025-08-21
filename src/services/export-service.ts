@@ -431,7 +431,7 @@ class ExportService {
     );
     
     const totalPowerConsumption = data.loads.reduce((sum, load) => 
-      sum + (load.power || 0), 0
+      sum + (load.powerKw || 0), 0
     );
 
     const fillPercentages = [...data.conduits, ...data.trays]

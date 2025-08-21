@@ -156,6 +156,8 @@ pub async fn save_project(
                     manufacturer: cable.manufacturer,
                     part_number: cable.part_number,
                     outer_diameter: cable.outer_diameter,
+                    tray_id: cable.tray_id,
+                    conduit_id: cable.conduit_id,
                     notes: cable.notes,
                 };
                 file_db.insert_cable(project_id, &new_cable_data)?;
@@ -686,6 +688,8 @@ pub async fn update_cable_voltage_drop(
                         outer_diameter: None,
                         voltage_drop_percentage: Some(result.voltage_drop_percentage),
                         segregation_warning: None,
+                        tray_id: None,
+                        conduit_id: None,
                         notes: None,
                     };
                     

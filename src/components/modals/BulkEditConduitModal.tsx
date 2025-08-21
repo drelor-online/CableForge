@@ -5,7 +5,7 @@ import { useUI } from '../../contexts/UIContext';
 interface BulkEditConduitModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (updates: Partial<Conduit>) => Promise<void>;
+  onSave: (updates: Partial<Conduit>, selectedFields: string[]) => Promise<void>;
   selectedConduits: Conduit[];
   isLoading?: boolean;
 }
@@ -33,7 +33,7 @@ interface FieldUpdateState {
 export const BulkEditConduitModal: React.FC<BulkEditConduitModalProps> = ({
   isOpen,
   onClose,
-  onUpdate,
+  onSave,
   selectedConduits,
   isLoading = false
 }) => {
@@ -160,12 +160,12 @@ export const BulkEditConduitModal: React.FC<BulkEditConduitModalProps> = ({
         }
       });
 
-      await onUpdate(updates);
+      await onSave(updates, Object.keys(fieldsToUpdate).filter(key => fieldsToUpdate[key as keyof FieldUpdateState]));
       onClose();
     } catch (error) {
       showError(`Failed to update conduits: ${error}`);
     }
-  }, [fieldsToUpdate, updateData, validateForm, onUpdate, onClose, showError]);
+  }, [fieldsToUpdate, updateData, validateForm, onSave, onClose, showError]);
 
   // Handle keyboard shortcuts
   useEffect(() => {

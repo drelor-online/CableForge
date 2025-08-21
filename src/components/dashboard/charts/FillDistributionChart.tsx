@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 
 interface UtilizationData {
   tag: string;
@@ -126,9 +126,12 @@ const FillDistributionChart: React.FC<FillDistributionChartProps> = ({
           <Tooltip content={<CustomTooltip />} />
           <Bar 
             dataKey="fillPercentage" 
-            fill={(entry: any) => getBarColor(entry)}
             radius={[2, 2, 0, 0]}
-          />
+          >
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={getBarColor(entry)} />
+            ))}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
       

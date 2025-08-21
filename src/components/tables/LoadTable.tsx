@@ -635,7 +635,6 @@ const LoadTable: React.FC<LoadTableProps> = ({
           suppressRowClickSelection={true}
           onGridReady={onGridReady}
           onCellValueChanged={handleRowValueChanged}
-          onRowValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
           getRowId={(params) => params.data.id?.toString() || params.data.tag || Math.random().toString()}
           headerHeight={32}
