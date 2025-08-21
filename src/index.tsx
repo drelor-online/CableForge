@@ -6,8 +6,9 @@ import reportWebVitals from './reportWebVitals';
 import { UIProvider } from './contexts/UIContext';
 // Register AG-Grid modules
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
-import 'ag-grid-community/styles/ag-grid.css';
-import 'ag-grid-community/styles/ag-theme-quartz.css';
+// Using AG Grid Theming API instead of CSS files to avoid theming conflicts
+// import 'ag-grid-community/styles/ag-grid.css';
+// import 'ag-grid-community/styles/ag-theme-quartz.css';
 // Fix ResizeObserver loop errors before initializing React
 import { patchResizeObserver } from './utils/resize-observer-fix';
 

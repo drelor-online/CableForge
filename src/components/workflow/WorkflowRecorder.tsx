@@ -11,6 +11,7 @@ import {
   CableForgeWorkflowStep,
   StepIndicator 
 } from '../../types/workflow';
+import { workflowService } from '../../services/workflow-service';
 
 interface WorkflowRecorderProps {
   onClose?: () => void;
@@ -42,13 +43,20 @@ export const WorkflowRecorder: React.FC<WorkflowRecorderProps> = ({ onClose }) =
     { selector: '[data-testid="new-project-btn"]', step: 'dashboard', description: 'Project Dashboard' },
     { selector: '[data-testid="open-project-btn"]', step: 'file-operations', description: 'File Operations' },
     { selector: '[data-testid="save-project-btn"]', step: 'file-operations', description: 'File Operations' },
-    { selector: '.ag-theme-cableforge', step: 'cable-management', description: 'Cable Management' },
+    { selector: '[data-testid="tab-cables"]', step: 'cable-management', description: 'Cable Management' },
+    { selector: '[data-testid="tab-io"]', step: 'io-management', description: 'I/O Management' },
+    { selector: '[data-testid="tab-conduits"]', step: 'conduit-management', description: 'Conduit Management' },
+    { selector: '[data-testid="tab-loads"]', step: 'cable-management', description: 'Load Management' },
+    { selector: '[data-testid="tab-trays"]', step: 'conduit-management', description: 'Tray Management' },
+    { selector: '[data-testid="tab-dashboard"]', step: 'dashboard', description: 'Engineering Dashboard' },
+    { selector: '[data-testid="find-replace-btn"]', step: 'cable-editing', description: 'Find & Replace' },
+    { selector: '[data-testid="auto-numbering-btn"]', step: 'cable-editing', description: 'Auto-numbering' },
+    { selector: '[data-testid="workflow-recorder-toggle"]', step: 'dashboard', description: 'Workflow Recorder' },
+    { selector: '[data-testid="workflow-settings-menu"]', step: 'dashboard', description: 'Workflow Settings' },
+    { selector: '.ag-theme-cableforge', step: 'cable-management', description: 'Data Grid' },
     { selector: '[data-testid="add-cable-btn"]', step: 'cable-editing', description: 'Cable Editing' },
     { selector: '.validation-error', step: 'validation-review', description: 'Validation Review' },
     { selector: '.validation-warning', step: 'validation-review', description: 'Validation Review' },
-    { selector: '[data-tab="io"]', step: 'io-management', description: 'I/O Management' },
-    { selector: '[data-tab="conduits"]', step: 'conduit-management', description: 'Conduit Management' },
-    { selector: '[data-tab="reports"]', step: 'reports', description: 'Reports & Export' },
   ];
 
   // Generate unique selector for an element
@@ -305,24 +313,7 @@ export const WorkflowRecorder: React.FC<WorkflowRecorderProps> = ({ onClose }) =
   // Auto-save workflow JSON
   const autoSaveWorkflowJSON = useCallback(async (sessionData: WorkflowSession) => {
     try {
-      const exportData = {
-        session: sessionData,
-        metadata: {
-          userAgent: navigator.userAgent,
-          url: window.location.href,
-          timestamp: new Date().toISOString(),
-          totalInteractions: sessionData.interactions.length,
-          totalScreenshots: sessionData.screenshots.length,
-        }
-      };
-
-      const dataStr = JSON.stringify(exportData, null, 2);
-      
-      await invoke('save_workflow_json', { 
-        sessionId: sessionData.sessionId, 
-        workflowData: dataStr 
-      });
-      
+      await workflowService.saveWorkflowSession(sessionData);
       console.log('✅ Workflow JSON auto-saved');
     } catch (error) {
       console.warn('⚠️ Auto-save workflow JSON failed:', error);
@@ -331,18 +322,22 @@ export const WorkflowRecorder: React.FC<WorkflowRecorderProps> = ({ onClose }) =
 
   // Periodic auto-save during recording
   useEffect(() => {
-    if (!isRecording || !session) return;
+    if (!isRecording) return;
 
     const autoSaveInterval = setInterval(async () => {
-      if (session && session.interactions.length > 0) {
-        await autoSaveWorkflowJSON(session);
-      }
-    }, 30000); // Auto-save every 30 seconds
+      // Use the latest session state from the setter function
+      setSession(currentSession => {
+        if (currentSession && currentSession.interactions.length > 0) {
+          autoSaveWorkflowJSON(currentSession);
+        }
+        return currentSession; // Return unchanged to avoid triggering state update
+      });
+    }, 60000); // Auto-save every 60 seconds (reduced frequency)
 
     return () => {
       clearInterval(autoSaveInterval);
     };
-  }, [isRecording, session, autoSaveWorkflowJSON]);
+  }, [isRecording, autoSaveWorkflowJSON]);
 
   const startRecording = useCallback(() => {
     const sessionId = `cableforge-workflow-${Date.now()}`;
@@ -397,6 +392,16 @@ export const WorkflowRecorder: React.FC<WorkflowRecorderProps> = ({ onClose }) =
     setNoteText('');
     setShowNoteModal(false);
   }, [noteText, isRecording, getElementSelector, currentStep]);
+
+  const deleteAllRecordings = useCallback(async () => {
+    try {
+      await invoke('delete_all_workflows');
+      alert('All workflow recordings have been deleted.');
+    } catch (error) {
+      console.error('Failed to delete recordings:', error);
+      alert('Failed to delete recordings: ' + error);
+    }
+  }, []);
 
   const exportWorkflow = useCallback(async () => {
     if (!session) return;
@@ -552,6 +557,23 @@ export const WorkflowRecorder: React.FC<WorkflowRecorderProps> = ({ onClose }) =
                 {isRecording ? 'Stop' : 'Start'}
               </button>
               
+              <button
+                onClick={deleteAllRecordings}
+                disabled={isRecording}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #dc2626',
+                  borderRadius: '4px',
+                  cursor: isRecording ? 'not-allowed' : 'pointer',
+                  backgroundColor: isRecording ? '#f3f4f6' : '#fef2f2',
+                  color: isRecording ? '#6b7280' : '#dc2626',
+                  opacity: isRecording ? 0.5 : 1
+                }}
+                title="Delete all previous recordings"
+              >
+                🗑️ Clear All
+              </button>
+              
               {isRecording && (
                 <>
                   <button
@@ -605,7 +627,7 @@ export const WorkflowRecorder: React.FC<WorkflowRecorderProps> = ({ onClose }) =
             </div>
 
             <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px' }}>
-              Shortcuts: F9 (Toggle) | F10 (Screenshot) | F11 (Note)
+              Shortcuts: Ctrl+Shift+W (Toggle) | F10 (Screenshot) | F11 (Note)
             </div>
           </>
         )}

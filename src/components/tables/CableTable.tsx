@@ -918,45 +918,7 @@ const CableTable: React.FC<CableTableProps> = ({
     // Add selection column and actions column
     const columns = [
       createSelectionColumn(),
-      ...dynamicColumns,
-      // Actions column (always present)
-      {
-        headerName: '',
-        field: 'actions',
-        width: 80,
-        pinned: 'right' as const,
-        sortable: false,
-        filter: false,
-        cellRenderer: (params: any) => {
-          if (params.data.id === -1) return null; // No actions for empty row
-          
-          const cable = params.data as Cable;
-          const status = getCableValidationStatus(cable.id);
-          
-          return (
-            <div className="flex items-center gap-1 h-full">
-              <ValidationIndicator 
-                status={status}
-              />
-              <KebabMenu
-                items={[
-                  {
-                    label: 'Edit',
-                    onClick: () => onCableEdit?.(cable),
-                    icon: <Edit2 className="h-4 w-4" />
-                  },
-                  {
-                    label: 'Delete',
-                    onClick: () => handleDeleteCable(cable),
-                    variant: 'danger' as const,
-                    icon: <Trash2 className="h-4 w-4" />
-                  }
-                ]}
-              />
-            </div>
-          );
-        }
-      }
+      ...dynamicColumns
     ];
     
     return columns;
@@ -1070,12 +1032,11 @@ const CableTable: React.FC<CableTableProps> = ({
             checkboxes: true,
             headerCheckbox: true,
             enableClickSelection: false,
+            copySelectedRows: true,
             isRowSelectable: (params) => params.data.id !== -1 // Don't allow selection of empty row
           }}
           // Excel-like features (Community version limited)
           enableCellTextSelection={true}
-          suppressCopyRowsToClipboard={false}
-          suppressCopySingleCellRanges={false}
           // Cell navigation
           suppressMovableColumns={false}
           ensureDomOrder={true}

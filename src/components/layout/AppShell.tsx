@@ -78,7 +78,7 @@ const AppShell: React.FC<AppShellProps> = ({
   onSaveAsTemplate,
   onQuickExportAll,
   onQuickExportSummary,
-  onQuickExportCSV
+  onQuickExportCSV,
 }) => {
 
 

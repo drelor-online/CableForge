@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useRef } from 'react';
 import { X } from 'lucide-react';
 import { ModalProps } from '../../types/common';
+import { Icon } from './Icon';
 
 interface ModalComponentProps extends ModalProps {
   children: React.ReactNode;
@@ -126,7 +127,7 @@ export const Modal: React.FC<ModalComponentProps> = ({
                 className="text-gray-400 hover:text-gray-600 transition-colors"
                 aria-label="Close modal"
               >
-                <X className="w-6 h-6" />
+                <Icon icon={X} size="md" />
               </button>
             )}
           </div>

@@ -39,5 +39,6 @@ anyhow = "1.0"
 
 # Workflow recording dependencies
 screenshots = "0.8"
+image = "0.24"
 zip = "0.6"
 dirs = "5.0"

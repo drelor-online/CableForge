@@ -3,7 +3,8 @@ import { ColumnDefinition } from '../../services/column-service';
 import { FilterCondition, filterService } from '../../services/filter-service';
 import { FilterConfigService } from '../../config/filter-types';
 import { Filter, X, ChevronDown, ChevronUp, Save, FolderOpen } from 'lucide-react';
-import { colors } from '../../theme';
+import { colors, theme } from '../../theme';
+import { Icon } from '../common/Icon';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import FilterDropdown from './FilterDropdown';
 
@@ -115,11 +116,11 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
       <div 
         className="flex items-center justify-between px-4 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
-        style={{ minHeight: '40px' }}
+        style={{ minHeight: theme.heights.tableRow }}
       >
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-600" />
+            <Icon icon={Filter} size="sm" color={colors.gray[600]} />
             <span className="text-sm font-medium text-gray-700">
               {hasActiveFilters ? `${filteredCount} of ${data.length} rows` : `All ${data.length} rows`}
             </span>
@@ -149,7 +150,7 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
                       className="ml-1 hover:bg-blue-200 rounded"
                       style={{ color: colors.blue[600] }}
                     >
-                      <X className="w-3 h-3" />
+                      <Icon icon={X} size="xs" />
                     </button>
                   </div>
                 );
@@ -186,7 +187,7 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
               className="text-xs px-2 py-1 rounded hover:bg-gray-200 flex items-center gap-1"
               style={{ color: colors.gray[600] }}
             >
-              <FolderOpen className="w-3 h-3" />
+              <Icon icon={FolderOpen} size="xs" />
               Presets
             </button>
             
@@ -208,7 +209,7 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
                       className="w-full text-left px-2 py-1 text-xs rounded hover:bg-gray-50 flex items-center gap-1"
                       style={{ color: colors.green[600] }}
                     >
-                      <Save className="w-3 h-3" />
+                      <Icon icon={Save} size="xs" />
                       Save Current Filters
                     </button>
                   )}
@@ -230,7 +231,7 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
                             className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded"
                             style={{ color: colors.red[600] }}
                           >
-                            <X className="w-3 h-3" />
+                            <Icon icon={X} size="xs" />
                           </button>
                         </div>
                       ))}
@@ -247,11 +248,37 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
             )}
           </div>
           
-          {isExpanded ? (
-            <ChevronUp className="w-4 h-4 text-gray-500" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-gray-500" />
-          )}
+          <div style={{ width: '16px', height: '16px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {isExpanded ? (
+              <svg 
+                width="16" 
+                height="16" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke={colors.gray[500]} 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+                style={{ flexShrink: 0 }}
+              >
+                <path d="m18 15-6-6-6 6"/>
+              </svg>
+            ) : (
+              <svg 
+                width="16" 
+                height="16" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke={colors.gray[500]} 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+                style={{ flexShrink: 0 }}
+              >
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            )}
+          </div>
         </div>
       </div>
 

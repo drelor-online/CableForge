@@ -1,5 +1,6 @@
 import React from 'react';
 import { RoutingMetrics } from '../../../services/dashboard-service';
+import { theme, colors } from '../../../theme';
 
 interface RoutingUtilizationCardProps {
   metrics: RoutingMetrics;
@@ -14,23 +15,23 @@ const RoutingUtilizationCard: React.FC<RoutingUtilizationCardProps> = ({ metrics
     if (overfilledCount > 0) {
       return { 
         text: 'Overfilled', 
-        color: 'text-red-600', 
-        bgColor: 'bg-red-100',
-        dotColor: 'bg-red-500'
+        color: colors.error[600], 
+        bgColor: colors.error[50],
+        dotColor: colors.error[500]
       };
     } else if (metrics.averageTrayFill > 80 || metrics.averageConduitFill > 80) {
       return { 
         text: 'Near Capacity', 
-        color: 'text-yellow-600', 
-        bgColor: 'bg-yellow-100',
-        dotColor: 'bg-yellow-500'
+        color: colors.warning[600], 
+        bgColor: colors.warning[50],
+        dotColor: colors.warning[500]
       };
     } else {
       return { 
         text: 'Optimal', 
-        color: 'text-green-600', 
-        bgColor: 'bg-green-100',
-        dotColor: 'bg-green-500'
+        color: colors.success[600], 
+        bgColor: colors.success[50],
+        dotColor: colors.success[500]
       };
     }
   };
@@ -38,12 +39,37 @@ const RoutingUtilizationCard: React.FC<RoutingUtilizationCardProps> = ({ metrics
   const status = getUtilizationStatus();
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-6">
+    <div style={{
+      backgroundColor: colors.background.primary,
+      borderRadius: theme.borderRadius.lg,
+      boxShadow: theme.shadows.sm,
+      border: `1px solid ${colors.border.light}`,
+      padding: theme.spacing[6]
+    }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Routing System</h3>
-        <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-lg">
-          <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: theme.spacing[4]
+      }}>
+        <h3 style={{
+          fontSize: theme.typography.fontSize.lg,
+          fontWeight: theme.typography.fontWeight.semibold,
+          color: colors.text.primary
+        }}>
+          Routing System
+        </h3>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '48px',
+          height: '48px',
+          backgroundColor: colors.purple[100],
+          borderRadius: theme.borderRadius.lg
+        }}>
+          <svg width="24" height="24" fill="none" stroke={colors.purple[600]} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
               d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
@@ -51,14 +77,36 @@ const RoutingUtilizationCard: React.FC<RoutingUtilizationCardProps> = ({ metrics
       </div>
 
       {/* Main Metrics */}
-      <div className="space-y-4">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing[4] }}>
         {/* Container Count */}
         <div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-bold text-gray-900">{totalContainers}</span>
-            <span className="text-sm text-gray-500">containers</span>
+          <div style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between'
+          }}>
+            <span style={{
+              fontSize: theme.typography.fontSize['2xl'],
+              fontWeight: theme.typography.fontWeight.bold,
+              color: colors.text.primary
+            }}>
+              {totalContainers}
+            </span>
+            <span style={{
+              fontSize: theme.typography.fontSize.sm,
+              color: colors.text.tertiary
+            }}>
+              containers
+            </span>
           </div>
-          <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: theme.spacing[4],
+            fontSize: theme.typography.fontSize.sm,
+            color: colors.text.secondary,
+            marginTop: theme.spacing[1]
+          }}>
             <span>{metrics.totalTrays} trays</span>
             <span>•</span>
             <span>{metrics.totalConduits} conduits</span>
@@ -66,7 +114,13 @@ const RoutingUtilizationCard: React.FC<RoutingUtilizationCardProps> = ({ metrics
         </div>
 
         {/* Average Fill Percentages */}
-        <div className="border-t pt-3 space-y-2">
+        <div style={{
+          borderTop: `1px solid ${colors.border.light}`,
+          paddingTop: theme.spacing[3],
+          display: 'flex',
+          flexDirection: 'column',
+          gap: theme.spacing[2]
+        }}>
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-600">Avg. Tray Fill:</span>
             <div className="flex items-center gap-2">

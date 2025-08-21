@@ -2,6 +2,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { ToastNotification } from '../../types/common';
 import { errorService } from '../../services/error-service';
 import { X, CheckCircle, AlertTriangle, Info, AlertCircle } from 'lucide-react';
+import { Icon } from './Icon';
+import { colors } from '../../theme';
 
 interface ToastProps {
   toast: ToastNotification;
@@ -40,15 +42,15 @@ const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
   const getIcon = () => {
     switch (toast.type) {
       case 'success':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return <Icon icon={CheckCircle} size="md" color={colors.green[500]} />;
       case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-500" />;
+        return <Icon icon={AlertCircle} size="md" color={colors.red[500]} />;
       case 'warning':
-        return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+        return <Icon icon={AlertTriangle} size="md" color={colors.yellow[500]} />;
       case 'info':
-        return <Info className="w-5 h-5 text-blue-500" />;
+        return <Icon icon={Info} size="md" color={colors.blue[500]} />;
       default:
-        return <Info className="w-5 h-5 text-gray-500" />;
+        return <Icon icon={Info} size="md" color={colors.gray[500]} />;
     }
   };
 
@@ -138,7 +140,7 @@ const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
               className={`rounded-md inline-flex focus:outline-none focus:ring-2 focus:ring-offset-2 ${getTitleClass()} hover:opacity-75`}
             >
               <span className="sr-only">Close</span>
-              <X className="w-4 h-4" />
+              <Icon icon={X} size="sm" />
             </button>
           </div>
         </div>

@@ -8,11 +8,6 @@ import LoadTable from './components/tables/LoadTable';
 import ConduitTable from './components/tables/ConduitTable';
 import TrayTable from './components/tables/TrayTable';
 import EngineeringDashboard from './components/dashboard/EngineeringDashboard';
-import EditCableModal from './components/modals/EditCableModal';
-import { EditIOPointModal } from './components/modals/EditIOPointModal';
-import { EditLoadModal } from './components/modals/EditLoadModal';
-import { EditConduitModal } from './components/modals/EditConduitModal';
-import { EditTrayModal } from './components/modals/EditTrayModal';
 import BulkEditModal from './components/modals/BulkEditModal';
 import BulkEditConduitModal from './components/modals/BulkEditConduitModal';
 import BulkEditTrayModal from './components/modals/BulkEditTrayModal';
@@ -27,6 +22,7 @@ import ImportWizardModal from './components/modals/ImportWizardModal';
 import RevisionHistoryPanel from './components/revision/RevisionHistoryPanel';
 import RevisionComparisonModal from './components/revision/RevisionComparisonModal';
 import TemplateSelectionModal from './components/modals/TemplateSelectionModal';
+import { WorkflowRecorder } from './components/workflow/WorkflowRecorder';
 import { useAppStore } from './stores/useAppStore';
 import { useDatabaseStore } from './stores/useDatabaseStore';
 import { validationService } from './services/validation-service';
@@ -119,16 +115,6 @@ function App() {
   });
 
   // Modal states
-  const [showEditCableModal, setShowEditCableModal] = useState(false);
-  const [editingCable, setEditingCable] = useState<Cable | null>(null);
-  const [showEditIOPointModal, setShowEditIOPointModal] = useState(false);
-  const [editingIOPoint, setEditingIOPoint] = useState<IOPoint | null>(null);
-  const [showEditLoadModal, setShowEditLoadModal] = useState(false);
-  const [editingLoad, setEditingLoad] = useState<Load | null>(null);
-  const [showEditConduitModal, setShowEditConduitModal] = useState(false);
-  const [editingConduit, setEditingConduit] = useState<Conduit | null>(null);
-  const [showEditTrayModal, setShowEditTrayModal] = useState(false);
-  const [editingTray, setEditingTray] = useState<Tray | null>(null);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
   const [showBulkEditConduitModal, setShowBulkEditConduitModal] = useState(false);
   const [showBulkEditTrayModal, setShowBulkEditTrayModal] = useState(false);
@@ -145,6 +131,7 @@ function App() {
   const [comparisonRevisions, setComparisonRevisions] = useState<{ revisionA: number | null; revisionB: number | null }>({ revisionA: null, revisionB: null });
   const [showTemplateSelection, setShowTemplateSelection] = useState(false);
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
+  const [showWorkflowRecorder, setShowWorkflowRecorder] = useState(false);
 
   // Initialize database and revision service on mount
   useEffect(() => {
@@ -244,47 +231,6 @@ function App() {
   }, [openProject]);
 
 
-  const handleEditCable = useCallback((cable: Cable) => {
-    console.log('handleEditCable: Opening edit modal for cable:', cable.tag);
-    setEditingCable(cable);
-    setShowEditCableModal(true);
-  }, []);
-
-  const handleModalUpdateCable = useCallback(async (id: number, cableData: Partial<Cable>) => {
-    console.log('handleModalUpdateCable: Updating cable with ID:', id, 'Data:', cableData);
-    try {
-      await updateCable(id, cableData);
-      showSuccess(`Cable ${cableData.tag || editingCable?.tag} updated successfully!`);
-    } catch (error) {
-      console.error('handleModalUpdateCable: Failed to update cable:', error);
-      throw error; // Re-throw so modal can handle it
-    }
-  }, [updateCable, editingCable?.tag, showSuccess]);
-
-  const handleCloseEditCableModal = useCallback(() => {
-    setShowEditCableModal(false);
-    setEditingCable(null);
-  }, []);
-
-  const handleCloseEditIOPointModal = useCallback(() => {
-    setShowEditIOPointModal(false);
-    setEditingIOPoint(null);
-  }, []);
-
-  const handleCloseEditLoadModal = useCallback(() => {
-    setShowEditLoadModal(false);
-    setEditingLoad(null);
-  }, []);
-
-  const handleCloseEditConduitModal = useCallback(() => {
-    setShowEditConduitModal(false);
-    setEditingConduit(null);
-  }, []);
-
-  const handleCloseEditTrayModal = useCallback(() => {
-    setShowEditTrayModal(false);
-    setEditingTray(null);
-  }, []);
 
   const handleAddFromLibrary = useCallback(() => {
     console.log('handleAddFromLibrary: Opening library modal');
@@ -292,10 +238,6 @@ function App() {
   }, []);
 
   // I/O Point handlers
-  const handleIOPointEdit = useCallback((ioPoint: IOPoint) => {
-    setEditingIOPoint(ioPoint);
-    setShowEditIOPointModal(true);
-  }, []);
 
   const handleIOBulkEdit = useCallback(() => {
     console.log('Bulk edit IO points:', selectedIOPoints);
@@ -329,10 +271,6 @@ function App() {
   }, [addIOPoint, updateIOPoint, showSuccess, showError]);
 
   // Load handlers
-  const handleLoadEdit = useCallback((load: Load) => {
-    setEditingLoad(load);
-    setShowEditLoadModal(true);
-  }, []);
 
   const handleLoadBulkEdit = useCallback(() => {
     console.log('Bulk edit loads:', selectedLoads);
@@ -398,10 +336,6 @@ function App() {
     }
   }, [deleteConduit, showSuccess, showError]);
 
-  const handleConduitEdit = useCallback((conduit: Conduit) => {
-    setEditingConduit(conduit);
-    setShowEditConduitModal(true);
-  }, []);
 
   const handleConduitBulkEdit = useCallback(() => {
     console.log('Bulk edit conduits:', selectedConduits);
@@ -445,10 +379,6 @@ function App() {
     }
   }, [deleteTray, showSuccess, showError]);
 
-  const handleTrayEdit = useCallback((tray: Tray) => {
-    setEditingTray(tray);
-    setShowEditTrayModal(true);
-  }, []);
 
   const handleTrayBulkEdit = useCallback(() => {
     console.log('Bulk edit trays:', selectedTrays);
@@ -937,6 +867,24 @@ function App() {
     setShowFindReplaceModal(false);
   }, []);
 
+  const handleToggleWorkflowRecorder = useCallback(() => {
+    setShowWorkflowRecorder(!showWorkflowRecorder);
+  }, [showWorkflowRecorder]);
+
+  // Add keyboard shortcut for workflow recorder (Ctrl+Shift+W)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'W') {
+        e.preventDefault();
+        setShowWorkflowRecorder(!showWorkflowRecorder);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showWorkflowRecorder]);
+
+
   const handleCloseExport = useCallback(() => {
     setShowExportModal(false);
   }, []);
@@ -1138,7 +1086,6 @@ function App() {
             conduits={conduits}
             onCableUpdate={updateCable}
             onCableDelete={deleteCable}
-            onCableEdit={handleEditCable}
             onBulkEdit={handleBulkEdit}
             selectedCables={selectedCables}
             onSelectionChange={setSelectedCables}
@@ -1159,7 +1106,6 @@ function App() {
             plcCards={plcCards}
             onIOPointUpdate={handleIOPointUpdate}
             onIOPointDelete={deleteIOPoint}
-            onIOPointEdit={handleIOPointEdit}
             onAddIOPoint={handleAddIOPoint}
             onAddFromLibrary={handleAddFromLibrary}
             onBulkEdit={handleIOBulkEdit}
@@ -1173,7 +1119,6 @@ function App() {
             conduits={conduits}
             onConduitUpdate={handleConduitUpdate}
             onConduitDelete={handleConduitDelete}
-            onConduitEdit={handleConduitEdit}
             onAddConduit={handleAddConduit}
             onAddFromLibrary={handleAddFromLibrary}
             onBulkEdit={handleConduitBulkEdit}
@@ -1187,7 +1132,6 @@ function App() {
             loads={loads}
             onLoadUpdate={handleLoadUpdate}
             onLoadDelete={deleteLoad}
-            onLoadEdit={handleLoadEdit}
             onAddLoad={handleAddLoad}
             onAddFromLibrary={handleAddFromLibrary}
             onBulkEdit={handleLoadBulkEdit}
@@ -1201,7 +1145,6 @@ function App() {
             trays={trays}
             onTrayUpdate={handleTrayUpdate}
             onTrayDelete={handleTrayDelete}
-            onTrayEdit={handleTrayEdit}
             onAddTray={handleAddTray}
             onAddFromLibrary={handleAddFromLibrary}
             onBulkEdit={handleTrayBulkEdit}
@@ -1299,50 +1242,6 @@ function App() {
       </AppShell>
 
       {/* Modals */}
-      <EditCableModal
-        isOpen={showEditCableModal}
-        onClose={handleCloseEditCableModal}
-        onUpdate={handleModalUpdateCable}
-        cable={editingCable}
-        isLoading={isLoading}
-      />
-
-      <EditIOPointModal
-        isOpen={showEditIOPointModal}
-        onClose={handleCloseEditIOPointModal}
-        onUpdate={handleIOPointUpdate}
-        ioPoint={editingIOPoint}
-        cables={cables}
-        plcCards={plcCards}
-        isLoading={isLoading}
-      />
-
-      <EditLoadModal
-        isOpen={showEditLoadModal}
-        onClose={handleCloseEditLoadModal}
-        onUpdate={handleLoadUpdate}
-        load={editingLoad}
-        cables={cables}
-        isLoading={isLoading}
-      />
-
-      <EditConduitModal
-        isOpen={showEditConduitModal}
-        onClose={handleCloseEditConduitModal}
-        onUpdate={handleConduitUpdate}
-        conduit={editingConduit}
-        cables={cables}
-        isLoading={isLoading}
-      />
-
-      <EditTrayModal
-        isOpen={showEditTrayModal}
-        onClose={handleCloseEditTrayModal}
-        onUpdate={handleTrayUpdate}
-        tray={editingTray}
-        cables={cables}
-        isLoading={isLoading}
-      />
 
       <BulkEditModal
         isOpen={showBulkEditModal}
@@ -1456,6 +1355,11 @@ function App() {
         onSelectTemplate={handleSelectTemplate}
         onCreateFromScratch={handleCreateFromScratch}
       />
+      
+      {/* Workflow Recorder */}
+      {showWorkflowRecorder && (
+        <WorkflowRecorder onClose={() => setShowWorkflowRecorder(false)} />
+      )}
       
       {/* Toast Notifications */}
       <ToastContainer />

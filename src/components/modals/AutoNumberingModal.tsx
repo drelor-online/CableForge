@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { AutoNumberingSettings } from '../../types/settings';
 import { autoNumberingService } from '../../services/auto-numbering-service';
+import Modal, { ModalFooter } from '../ui/Modal';
+import Input from '../ui/Input';
 
 interface AutoNumberingModalProps {
   isOpen: boolean;
@@ -49,132 +51,116 @@ const AutoNumberingModal: React.FC<AutoNumberingModalProps> = ({
     return tags;
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Auto-numbering Settings
-          </h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Configure how cable tags are automatically generated
-          </p>
-        </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={handleCancel}
+      title="Auto-numbering Settings"
+      size="md"
+      footer={
+        <ModalFooter
+          onCancel={handleCancel}
+          onConfirm={handleSave}
+          cancelLabel="Cancel"
+          confirmLabel="Save Settings"
+        />
+      }
+    >
 
-        <div className="px-6 py-4 space-y-4">
+        <div style={{ 
+          marginBottom: '16px',
+          fontSize: '14px',
+          color: '#6b7280'
+        }}>
+          Configure how cable tags are automatically generated
+        </div>
+        
+        <div style={{ display: 'grid', gap: '16px' }}>
           {/* Prefix */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Prefix
-            </label>
-            <input
-              type="text"
-              value={settings.prefix}
-              onChange={(e) => setSettings(prev => ({ ...prev, prefix: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="C-"
-            />
-          </div>
+          <Input
+            label="Prefix"
+            value={settings.prefix}
+            onChange={(e) => setSettings(prev => ({ ...prev, prefix: e.target.value }))}
+            placeholder="C-"
+          />
 
           {/* Starting Number */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Starting Number
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={settings.startNumber}
-              onChange={(e) => setSettings(prev => ({ ...prev, startNumber: parseInt(e.target.value) || 1 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+          <Input
+            label="Starting Number"
+            type="number"
+            min="1"
+            value={settings.startNumber.toString()}
+            onChange={(e) => setSettings(prev => ({ ...prev, startNumber: parseInt(e.target.value) || 1 }))}
+          />
 
           {/* Increment */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Increment
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={settings.increment}
-              onChange={(e) => setSettings(prev => ({ ...prev, increment: parseInt(e.target.value) || 1 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+          <Input
+            label="Increment"
+            type="number"
+            min="1"
+            value={settings.increment.toString()}
+            onChange={(e) => setSettings(prev => ({ ...prev, increment: parseInt(e.target.value) || 1 }))}
+          />
 
           {/* Padding */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Number Padding (digits)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="6"
-              value={settings.padding}
-              onChange={(e) => setSettings(prev => ({ ...prev, padding: parseInt(e.target.value) || 3 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+          <Input
+            label="Number Padding (digits)"
+            type="number"
+            min="1"
+            max="6"
+            value={settings.padding.toString()}
+            onChange={(e) => setSettings(prev => ({ ...prev, padding: parseInt(e.target.value) || 3 }))}
+          />
 
           {/* Suffix */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Suffix
-            </label>
-            <input
-              type="text"
-              value={settings.suffix}
-              onChange={(e) => setSettings(prev => ({ ...prev, suffix: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="(optional)"
-            />
-          </div>
+          <Input
+            label="Suffix"
+            value={settings.suffix}
+            onChange={(e) => setSettings(prev => ({ ...prev, suffix: e.target.value }))}
+            placeholder="(optional)"
+          />
 
           {/* Preview */}
-          <div className="bg-gray-50 p-4 rounded-md">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div style={{
+            backgroundColor: '#f8fafc',
+            padding: '16px',
+            borderRadius: '6px',
+            border: '1px solid #e2e8f0'
+          }}>
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: '8px'
+            }}>
               Preview
-            </label>
-            <div className="space-y-1">
-              <div className="text-sm">
-                <span className="font-medium">First tag:</span>{' '}
-                <span className="font-mono bg-white px-2 py-1 rounded border">
+            </div>
+            <div style={{ display: 'grid', gap: '4px' }}>
+              <div style={{ fontSize: '14px' }}>
+                <span style={{ fontWeight: '500' }}>First tag:</span>{' '}
+                <span style={{
+                  fontFamily: 'monospace',
+                  backgroundColor: 'white',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  border: '1px solid #d1d5db'
+                }}>
                   {getPreviewTag()}
                 </span>
               </div>
-              <div className="text-sm">
-                <span className="font-medium">Next few tags:</span>{' '}
-                <span className="font-mono text-gray-600">
+              <div style={{ fontSize: '14px' }}>
+                <span style={{ fontWeight: '500' }}>Next few tags:</span>{' '}
+                <span style={{
+                  fontFamily: 'monospace',
+                  color: '#6b7280'
+                }}>
                   {getNextFewTags().join(', ')}
                 </span>
               </div>
             </div>
           </div>
         </div>
-
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Save Settings
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -100,6 +100,30 @@ export const theme = {
     easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
     sharp: 'cubic-bezier(0.4, 0, 0.6, 1)',
   },
+
+  // Icon sizes for consistent visual hierarchy
+  iconSizes: {
+    xs: '12px',    // 0.75rem - Small inline icons
+    sm: '16px',    // 1rem - Default size for most icons
+    md: '20px',    // 1.25rem - Medium icons in buttons/headers
+    lg: '24px',    // 1.5rem - Large feature icons
+    xl: '32px',    // 2rem - Hero icons, main actions
+    '2xl': '48px', // 3rem - Display icons
+  },
+
+  // Consistent element heights
+  heights: {
+    control: '32px',       // Standard form controls
+    controlSm: '28px',     // Small form controls
+    controlLg: '40px',     // Large form controls
+    button: '36px',        // Standard buttons
+    buttonSm: '28px',      // Small buttons
+    buttonLg: '44px',      // Large buttons
+    tableRow: '40px',      // Table rows
+    tableRowCompact: '32px', // Compact table rows
+    header: '56px',        // Header/toolbar height
+    headerCompact: '48px', // Compact header
+  },
 } as const;
 
 // All CSS variables combined

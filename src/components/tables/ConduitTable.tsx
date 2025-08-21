@@ -336,26 +336,6 @@ const ConduitTable: React.FC<ConduitTableProps> = ({
       width: 150,
       editable: true,
       cellEditor: 'agLargeTextCellEditor'
-    },
-    {
-      headerName: 'Actions',
-      field: 'actions',
-      width: 60,
-      pinned: 'right',
-      cellRenderer: (params: any) => (
-        <div className="flex items-center justify-center h-full">
-          <KebabMenu
-            items={[
-              { label: 'Edit', onClick: () => handleEdit(params.data) },
-              { label: 'View Cables', onClick: () => console.log('View cables for', params.data.tag) },
-              { label: 'Recalculate Fill', onClick: () => handleRecalculateFill(params.data) },
-              { label: 'Delete', onClick: () => handleDelete(params.data), variant: 'danger' }
-            ]}
-          />
-        </div>
-      ),
-      suppressMovable: true,
-      lockPosition: 'right'
     }
   ], [getFillColor, getStandardSizes, handleEdit, handleDelete, handleRecalculateFill]);
 
@@ -526,13 +506,6 @@ const ConduitTable: React.FC<ConduitTableProps> = ({
               title="Recalculate fill percentages for all conduits and trays"
             >
               Recalculate All Fills
-            </button>
-            <button
-              onClick={handleInlineAddConduit}
-              disabled={isAddingNew}
-              className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isAddingNew ? 'Adding...' : 'Add Conduit'}
             </button>
           </div>
         </div>

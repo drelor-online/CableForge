@@ -390,16 +390,6 @@ const TrayTable: React.FC<TrayTableProps> = ({
       editable: true,
       wrapText: true,
       autoHeight: true
-    },
-    {
-      headerName: 'Actions',
-      field: 'actions',
-      width: 80,
-      cellRenderer: actionsCellRenderer,
-      sortable: false,
-      filter: false,
-      resizable: false,
-      pinned: 'right'
     }
   ], [fillPercentageRenderer, dimensionsRenderer, actionsCellRenderer]);
 
@@ -559,19 +549,6 @@ const TrayTable: React.FC<TrayTableProps> = ({
               title="Recalculate fill percentages for all conduits and trays"
             >
               Recalculate All Fills
-            </button>
-            <button
-              onClick={handleInlineAddTray}
-              disabled={isAddingNew}
-              className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isAddingNew ? 'Adding...' : '+ Add Tray'}
-            </button>
-            <button
-              onClick={onAddFromLibrary}
-              className="px-3 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-            >
-              + From Library
             </button>
           </div>
         </div>

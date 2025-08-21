@@ -3,6 +3,7 @@ use crate::validation::{CableValidator, ValidationSummary, ValidationResult};
 use crate::calculations::{ElectricalCalculator, VoltageDropCalculation, VoltageDropResult, ConductorMaterial};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::fs;
 use tauri::State;
 
 // Application state
@@ -1281,4 +1282,60 @@ pub async fn import_cable_from_library(
     
     let cable = db.import_cable_from_library(project_id, revision_id, library_id, tag)?;
     Ok(cable)
+}
+
+// Additional workflow management commands
+#[tauri::command]
+pub async fn get_all_workflows() -> Result<Vec<String>, CommandError> {
+    let workflows_dir = PathBuf::from("workflows");
+    
+    if !workflows_dir.exists() {
+        return Ok(vec![]);
+    }
+    
+    let mut workflows = vec![];
+    for entry in fs::read_dir(workflows_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
+            if let Some(stem) = path.file_stem() {
+                workflows.push(stem.to_string_lossy().to_string());
+            }
+        }
+    }
+    
+    Ok(workflows)
+}
+
+#[tauri::command]
+pub async fn delete_all_workflows() -> Result<(), CommandError> {
+    // Get user's documents directory or temp directory as fallback
+    let base_dir = dirs::document_dir()
+        .or_else(|| std::env::temp_dir().into())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    
+    let workflow_dir = base_dir.join("CableForge").join("workflow-recordings");
+    
+    if workflow_dir.exists() {
+        // Delete all JSON files in the workflow-recordings directory
+        if let Ok(entries) = fs::read_dir(&workflow_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
+                        let _ = fs::remove_file(path);
+                    }
+                }
+            }
+        }
+        
+        // Delete the screenshots directory and all its contents
+        let screenshots_dir = workflow_dir.join("screenshots");
+        if screenshots_dir.exists() {
+            let _ = fs::remove_dir_all(&screenshots_dir);
+        }
+    }
+    
+    Ok(())
 }

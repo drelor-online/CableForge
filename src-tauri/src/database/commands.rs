@@ -1454,9 +1454,17 @@ impl Database {
         // Get the current revision to use as parent
         let current_revision_id = self.get_current_revision_id(project_id).ok();
         
+        // Get the next available minor revision for auto-saves
+        let next_minor = self.connection.prepare(
+            "SELECT COALESCE(MAX(minor_revision), -1) + 1 FROM revisions 
+             WHERE project_id = ?1 AND major_revision = 'Draft' AND is_auto_save = 1"
+        )?.query_row([project_id], |row| {
+            Ok(row.get::<_, i32>(0)?)
+        }).unwrap_or(0);
+        
         let new_revision = NewRevision {
             major_revision: "Draft".to_string(),
-            minor_revision: 0, // Will be auto-incremented
+            minor_revision: next_minor,
             description: Some("Auto-save".to_string()),
             is_checkpoint: false,
             is_auto_save: true,

@@ -10,6 +10,7 @@ import PLCCardPanel from '../ui/PLCCardPanel';
 import { PLCAssignmentService } from '../../services/plc-assignment-service';
 import { useUI } from '../../contexts/UIContext';
 import { Filter, SortAsc, SortDesc, ChevronDown, Plus, Search, X, Edit2, Copy, Zap, Trash2 } from 'lucide-react';
+import ContextMenu, { useContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 
 interface IOTableProps {
   ioPoints: IOPoint[];
@@ -55,6 +56,9 @@ const IOTable: React.FC<IOTableProps> = ({
   
   // PLC card panel state
   const [showPLCPanel, setShowPLCPanel] = useState(true);
+
+  // Context menu
+  const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
 
   // Filter I/O points based on search term and filters
   useEffect(() => {
@@ -201,8 +205,6 @@ const IOTable: React.FC<IOTableProps> = ({
     {
       headerName: '',
       field: 'selected',
-      checkboxSelection: true,
-      headerCheckboxSelection: true,
       width: 50,
       pinned: 'left',
       lockPosition: 'left',
@@ -349,51 +351,6 @@ const IOTable: React.FC<IOTableProps> = ({
           </span>
         );
       }
-    },
-    {
-      headerName: 'Actions',
-      field: 'actions',
-      width: 80,
-      cellRenderer: (params: any) => {
-        const ioPoint = params.data as IOPoint;
-        
-        const menuItems = [
-          {
-            label: 'Edit I/O point',
-            onClick: () => handleEdit(ioPoint),
-            icon: <Edit2 className="h-4 w-4" />
-          },
-          {
-            label: 'Duplicate I/O point',
-            onClick: () => {
-              const duplicatedIOPoint = { ...ioPoint };
-              delete duplicatedIOPoint.id;
-              duplicatedIOPoint.tag = `${ioPoint.tag}_copy`;
-              if (onIOPointEdit) {
-                onIOPointEdit(duplicatedIOPoint);
-              }
-            },
-            icon: <Copy className="h-4 w-4" />
-          },
-          {
-            label: 'Auto-assign channel',
-            onClick: () => handleAutoAssignChannel(ioPoint),
-            disabled: !ioPoint.ioType,
-            icon: <Zap className="h-4 w-4" />
-          },
-          {
-            label: 'Delete I/O point',
-            onClick: () => handleDelete(ioPoint),
-            variant: 'danger' as const,
-            icon: <Trash2 className="h-4 w-4" />
-          }
-        ];
-        
-        return <KebabMenu items={menuItems} />;
-      },
-      suppressMenu: true,
-      sortable: false,
-      filter: false
     }
   ], [handleDelete, handleEdit, getPLCCardUtilization, getUniquePLCNames]);
 
@@ -402,7 +359,7 @@ const IOTable: React.FC<IOTableProps> = ({
     filter: true,
     resizable: true,
     editable: false,
-    suppressMenu: false
+    suppressHeaderMenuButton: false
   }), []);
 
   const onGridReady = useCallback((params: GridReadyEvent) => {
@@ -665,6 +622,61 @@ const IOTable: React.FC<IOTableProps> = ({
     }
   }, [plcCards, ioPoints, onIOPointUpdate, showSuccess, showError]);
 
+  // Handle row context menu
+  const handleRowContextMenu = useCallback((event: React.MouseEvent, ioPoint?: IOPoint) => {
+    const menuItems: ContextMenuItem[] = [];
+
+    if (ioPoint) {
+      // Row-specific actions
+      menuItems.push(
+        {
+          id: 'edit',
+          label: 'Edit I/O Point',
+          icon: Edit2,
+          onClick: () => handleEdit(ioPoint),
+        },
+        {
+          id: 'duplicate',
+          label: 'Duplicate I/O Point',
+          icon: Copy,
+          onClick: () => {
+            const duplicatedIOPoint = { ...ioPoint };
+            delete duplicatedIOPoint.id;
+            duplicatedIOPoint.tag = `${ioPoint.tag}_copy`;
+            if (onIOPointEdit) {
+              onIOPointEdit(duplicatedIOPoint);
+            }
+          },
+        },
+        {
+          id: 'auto-assign',
+          label: 'Auto-assign Channel',
+          icon: Zap,
+          onClick: () => handleAutoAssignChannel(ioPoint),
+          disabled: !ioPoint.ioType,
+        },
+        {
+          id: 'delete',
+          label: 'Delete I/O Point',
+          icon: Trash2,
+          onClick: () => handleDelete(ioPoint),
+          variant: 'danger',
+          divider: true,
+        }
+      );
+    }
+
+    // Add new I/O point option (always available)
+    menuItems.push({
+      id: 'add-new',
+      label: 'Add New I/O Point',
+      icon: Plus,
+      onClick: () => handleInlineAddIOPoint(),
+    });
+
+    showContextMenu(event, menuItems);
+  }, [handleEdit, onIOPointEdit, handleAutoAssignChannel, handleDelete, handleInlineAddIOPoint, showContextMenu]);
+
   // Keyboard navigation handlers
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -812,16 +824,6 @@ const IOTable: React.FC<IOTableProps> = ({
               </button>
             )}
             
-            {/* Add I/O Point button */}
-            <div className="ml-auto">
-              <button
-                onClick={handleInlineAddIOPoint}
-                disabled={isAddingNew}
-                className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isAddingNew ? 'Adding...' : 'Add I/O Point'}
-              </button>
-            </div>
           </div>
           
           {/* Filter summary */}
@@ -845,8 +847,18 @@ const IOTable: React.FC<IOTableProps> = ({
           onGridReady={onGridReady}
           onCellValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
-          rowSelection="multiple"
-          suppressRowClickSelection={true}
+          onCellContextMenu={(event) => {
+            const ioPoint = event.data as IOPoint;
+            if (event.event) {
+              handleRowContextMenu(event.event as any as React.MouseEvent, ioPoint);
+            }
+          }}
+          rowSelection={{
+            mode: 'multiRow',
+            checkboxes: true,
+            headerCheckbox: true,
+            enableClickSelection: false
+          }}
           animateRows={true}
           enableCellTextSelection={true}
           ensureDomOrder={true}
@@ -856,7 +868,7 @@ const IOTable: React.FC<IOTableProps> = ({
               <div className="text-center">
                 <div className="text-2xl mb-2">📡</div>
                 <div className="text-sm font-medium mb-1">No I/O points found</div>
-                <div className="text-xs">Click "Add I/O Point" to get started</div>
+                <div className="text-xs">Right-click in the table to add new I/O points</div>
               </div>
             </div>
           )}
@@ -928,6 +940,15 @@ const IOTable: React.FC<IOTableProps> = ({
         onBulkExport={handleBulkExport}
         onClearSelection={handleClearSelection}
         isLoading={false}
+      />
+
+      {/* Context Menu */}
+      <ContextMenu
+        items={contextMenu.items}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        isOpen={contextMenu.isOpen}
+        onClose={hideContextMenu}
       />
     </div>
   );

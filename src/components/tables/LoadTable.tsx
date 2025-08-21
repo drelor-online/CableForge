@@ -321,24 +321,6 @@ const LoadTable: React.FC<LoadTableProps> = ({
       width: 150,
       editable: true,
       cellEditor: 'agLargeTextCellEditor'
-    },
-    {
-      headerName: 'Actions',
-      field: 'actions',
-      width: 60,
-      pinned: 'right',
-      cellRenderer: (params: any) => (
-        <div className="flex items-center justify-center h-full">
-          <KebabMenu
-            items={[
-              { label: 'Edit', onClick: () => handleEdit(params.data) },
-              { label: 'Delete', onClick: () => handleDelete(params.data), variant: 'danger' }
-            ]}
-          />
-        </div>
-      ),
-      suppressMovable: true,
-      lockPosition: 'right'
     }
   ], [formatPower, handleEdit, handleDelete]);
 
@@ -506,16 +488,6 @@ const LoadTable: React.FC<LoadTableProps> = ({
             </button>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex gap-2 ml-auto">
-            <button
-              onClick={handleInlineAddLoad}
-              disabled={isAddingNew}
-              className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isAddingNew ? 'Adding...' : 'Add Load'}
-            </button>
-          </div>
         </div>
       </div>
 

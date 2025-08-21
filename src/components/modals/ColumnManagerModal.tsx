@@ -142,13 +142,24 @@ const ColumnManagerModal: React.FC<ColumnManagerModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Column Manager
-          </h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Customize which columns are visible in the cable table
-          </p>
+        <div className="px-6 py-4 border-b border-gray-200 flex items-start justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Column Manager
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Customize which columns are visible in the cable table
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+            title="Close column manager"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Controls */}
@@ -236,7 +247,7 @@ const ColumnManagerModal: React.FC<ColumnManagerModalProps> = ({
         </div>
 
         {/* Column List */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
           {Object.entries(groupedColumns).map(([category, categoryColumns]) => (
             <div key={category} className="mb-6">
               {/* Category Header */}

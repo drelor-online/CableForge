@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AppState } from '../../types';
 import RevisionControls from '../revision/RevisionControls';
 import { FileMenu } from '../menu/FileMenu';
+import SettingsModal from '../modals/SettingsModal';
 import { Search, Settings, Download, Upload, ChevronDown, FileText, Database, BarChart3 } from 'lucide-react';
 
 interface CompactHeaderProps {
@@ -54,9 +55,10 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
   isLoading = false
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close export menu when clicking outside
+  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
@@ -67,16 +69,7 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-  // Calculate overall integrity percentage
-  const calculateIntegrityPercentage = () => {
-    if (!validationCounts) return 100;
-    
-    const totalChecks = 6; // Based on original integrity panel
-    const passedChecks = totalChecks - (validationCounts.errorCount + validationCounts.warningCount);
-    return Math.max(0, Math.round((passedChecks / totalChecks) * 100));
-  };
 
-  const integrityPercentage = calculateIntegrityPercentage();
 
   const tabs = [
     { key: 'cables' as const, label: 'Cable Schedule' },
@@ -115,6 +108,11 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
                 : 'text-white/60 hover:text-white/80 hover:bg-white/5'
               }
             `}
+            style={{
+              color: activeTab === tab.key ? '#ffffff' : '#ffffff99',
+              backgroundColor: activeTab === tab.key ? 'rgba(255, 255, 255, 0.1)' : 'transparent'
+            }}
+            data-testid={`tab-${tab.key}`}
           >
             {tab.label}
           </button>
@@ -132,20 +130,6 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
           />
         )}
 
-        {/* Engineering Integrity Bar */}
-        <div className="flex items-center gap-2 text-white/80">
-          <span className="text-xs">Integrity</span>
-          <div className="w-8 h-1 bg-white/20 rounded-full overflow-hidden">
-            <div
-              className={`h-full transition-all duration-300 ${
-                integrityPercentage >= 90 ? 'bg-green-400' :
-                integrityPercentage >= 70 ? 'bg-yellow-400' : 'bg-red-400'
-              }`}
-              style={{ width: `${integrityPercentage}%` }}
-            />
-          </div>
-          <span className="text-xs font-medium">{integrityPercentage}%</span>
-        </div>
 
         {/* Action Buttons */}
         <div className="flex gap-1.5">
@@ -154,6 +138,7 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
               onClick={onOpenFindReplace}
               className="p-1.5 text-xs font-medium bg-white/10 text-white border border-white/20 rounded hover:bg-white/20 transition-colors"
               title="Find & Replace"
+              data-testid="find-replace-btn"
             >
               <Search className="h-4 w-4" />
             </button>
@@ -163,6 +148,7 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
               onClick={onOpenAutoNumbering}
               className="p-1.5 text-xs font-medium bg-white/10 text-white border border-white/20 rounded hover:bg-white/20 transition-colors"
               title="Auto-numbering Settings"
+              data-testid="auto-numbering-btn"
             >
               <Settings className="h-4 w-4" />
             </button>
@@ -266,8 +252,23 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
               </div>
             )}
           </div>
+          
+          {/* Global Settings Button */}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="p-1.5 text-xs font-medium bg-white/10 text-white border border-white/20 rounded hover:bg-white/20 transition-colors"
+            title="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
         </div>
       </div>
+      
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
     </div>
   );
 };

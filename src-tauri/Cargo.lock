@@ -122,6 +122,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "dirs 5.0.1",
+ "image",
  "log",
  "rusqlite",
  "screenshots",

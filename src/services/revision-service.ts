@@ -289,6 +289,10 @@ export class RevisionService {
 
   // Utility methods
   public formatRevisionName(revision: RevisionSummary): string {
+    if (!revision || revision.majorRevision === undefined || revision.minorRevision === undefined) {
+      return 'Draft';
+    }
+    
     if (revision.isCheckpoint) {
       return `${revision.majorRevision}.${revision.minorRevision} (Checkpoint)`;
     } else if (revision.isAutoSave) {
