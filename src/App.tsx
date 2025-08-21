@@ -467,6 +467,250 @@ function App() {
     setShowMultiSheetExportModal(true);
   }, []);
 
+  // Quick export handlers
+  const handleQuickExportAll = useCallback(() => {
+    try {
+      const exportData = {
+        cables,
+        ioPoints,
+        loads,
+        conduits,
+        trays,
+        plcCards
+      };
+      
+      const headers = {
+        cables: ['Tag', 'Function', 'From', 'To', 'Voltage', 'Size', 'Type', 'Length', 'Route'],
+        ioPoints: ['Tag', 'Description', 'I/O Type', 'Signal Type', 'PLC', 'Rack', 'Slot', 'Channel'],
+        loads: ['Tag', 'Description', 'Type', 'Power (kW)', 'Voltage', 'Current', 'Power Factor'],
+        conduits: ['Tag', 'Type', 'Size', 'Fill %', 'From Location', 'To Location'],
+        trays: ['Tag', 'Type', 'Width', 'Height', 'Length', 'Material', 'Fill %']
+      };
+
+      const csvContent = Object.entries(exportData).map(([sheetName, data]) => {
+        if (!Array.isArray(data) || data.length === 0) return '';
+        
+        const header = headers[sheetName as keyof typeof headers];
+        if (!header) return '';
+        
+        const rows = [header.join(',')];
+        
+        data.forEach((item: any) => {
+          const row = header.map(h => {
+            const field = h.toLowerCase().replace(/[^a-z]/g, '');
+            let value = '';
+            
+            switch (field) {
+              case 'tag': value = item.tag || ''; break;
+              case 'function': value = item.function || ''; break;
+              case 'from': value = item.fromLocation || ''; break;
+              case 'to': value = item.toLocation || ''; break;
+              case 'voltage': value = item.voltage || ''; break;
+              case 'size': value = item.size || ''; break;
+              case 'type': value = item.type || item.loadType || item.ioType || ''; break;
+              case 'length': value = item.length || ''; break;
+              case 'route': value = item.route || ''; break;
+              case 'description': value = item.description || ''; break;
+              case 'iotype': value = item.ioType || ''; break;
+              case 'signaltype': value = item.signalType || ''; break;
+              case 'plc': value = item.plcName || ''; break;
+              case 'rack': value = item.rack || ''; break;
+              case 'slot': value = item.slot || ''; break;
+              case 'channel': value = item.channel || ''; break;
+              case 'powerkw': value = item.powerKw || ''; break;
+              case 'current': value = item.current || ''; break;
+              case 'powerfactor': value = item.powerFactor || ''; break;
+              case 'fill': value = item.fillPercentage || ''; break;
+              case 'fromlocation': value = item.fromLocation || ''; break;
+              case 'tolocation': value = item.toLocation || ''; break;
+              case 'width': value = item.width || ''; break;
+              case 'height': value = item.height || ''; break;
+              case 'material': value = item.material || ''; break;
+              default: value = ''; break;
+            }
+            
+            return `"${String(value).replace(/"/g, '""')}"`;
+          });
+          rows.push(row.join(','));
+        });
+        
+        return `=== ${sheetName.toUpperCase()} ===\n${rows.join('\n')}`;
+      }).filter(Boolean).join('\n\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        
+        const now = new Date();
+        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+        const filename = `project-export-all-${timestamp}.csv`;
+        
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showSuccess(`All project data exported to ${filename}`);
+      }
+    } catch (error) {
+      console.error('Quick export all failed:', error);
+      showError(`Export failed: ${error}`);
+    }
+  }, [cables, ioPoints, loads, conduits, trays, plcCards, showSuccess, showError]);
+
+  const handleQuickExportSummary = useCallback(() => {
+    try {
+      const summary = [
+        ['Category', 'Count', 'Details'],
+        ['Cables', cables.length, `${cables.filter(c => c.voltage).length} with voltage specified`],
+        ['I/O Points', ioPoints.length, `${ioPoints.filter(io => io.plcName).length} assigned to PLC`],
+        ['Loads', loads.length, `${loads.reduce((sum, l) => sum + (l.powerKw || 0), 0).toFixed(1)} kW total`],
+        ['Conduits', conduits.length, `${conduits.filter(c => (c.fillPercentage || 0) > 40).length} over 40% fill`],
+        ['Trays', trays.length, `${trays.filter(t => (t.fillPercentage || 0) > 50).length} over 50% fill`]
+      ];
+      
+      const csvContent = summary.map(row => 
+        row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+      ).join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        
+        const now = new Date();
+        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+        const filename = `project-summary-${timestamp}.csv`;
+        
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showSuccess(`Project summary exported to ${filename}`);
+      }
+    } catch (error) {
+      console.error('Quick export summary failed:', error);
+      showError(`Export failed: ${error}`);
+    }
+  }, [cables, ioPoints, loads, conduits, trays, showSuccess, showError]);
+
+  const handleQuickExportCSV = useCallback(() => {
+    try {
+      let currentData: any[] = [];
+      let headers: string[] = [];
+      let filename = '';
+      
+      switch (activeTab) {
+        case 'cables':
+          currentData = cables;
+          headers = ['Tag', 'Function', 'From', 'To', 'Voltage', 'Size', 'Type', 'Length', 'Route'];
+          filename = 'cables';
+          break;
+        case 'io':
+          currentData = ioPoints;
+          headers = ['Tag', 'Description', 'I/O Type', 'Signal Type', 'PLC', 'Rack', 'Slot', 'Channel'];
+          filename = 'io-points';
+          break;
+        case 'loads':
+          currentData = loads;
+          headers = ['Tag', 'Description', 'Type', 'Power (kW)', 'Voltage', 'Current', 'Power Factor'];
+          filename = 'loads';
+          break;
+        case 'conduits':
+          currentData = conduits;
+          headers = ['Tag', 'Type', 'Size', 'Fill %', 'From Location', 'To Location'];
+          filename = 'conduits';
+          break;
+        case 'trays':
+          currentData = trays;
+          headers = ['Tag', 'Type', 'Width', 'Height', 'Length', 'Material', 'Fill %'];
+          filename = 'trays';
+          break;
+        default:
+          showError('No data available for current tab');
+          return;
+      }
+      
+      if (currentData.length === 0) {
+        showError('No data to export');
+        return;
+      }
+      
+      const csvContent = [
+        headers.join(','),
+        ...currentData.map((item: any) => {
+          const row = headers.map(h => {
+            const field = h.toLowerCase().replace(/[^a-z]/g, '');
+            let value = '';
+            
+            switch (field) {
+              case 'tag': value = item.tag || ''; break;
+              case 'function': value = item.function || ''; break;
+              case 'from': value = item.fromLocation || ''; break;
+              case 'to': value = item.toLocation || ''; break;
+              case 'voltage': value = item.voltage || ''; break;
+              case 'size': value = item.size || ''; break;
+              case 'type': value = item.type || item.loadType || item.ioType || ''; break;
+              case 'length': value = item.length || ''; break;
+              case 'route': value = item.route || ''; break;
+              case 'description': value = item.description || ''; break;
+              case 'iotype': value = item.ioType || ''; break;
+              case 'signaltype': value = item.signalType || ''; break;
+              case 'plc': value = item.plcName || ''; break;
+              case 'rack': value = item.rack || ''; break;
+              case 'slot': value = item.slot || ''; break;
+              case 'channel': value = item.channel || ''; break;
+              case 'powerkw': value = item.powerKw || ''; break;
+              case 'current': value = item.current || ''; break;
+              case 'powerfactor': value = item.powerFactor || ''; break;
+              case 'fill': value = item.fillPercentage || ''; break;
+              case 'fromlocation': value = item.fromLocation || ''; break;
+              case 'tolocation': value = item.toLocation || ''; break;
+              case 'width': value = item.width || ''; break;
+              case 'height': value = item.height || ''; break;
+              case 'material': value = item.material || ''; break;
+              default: value = ''; break;
+            }
+            
+            return `"${String(value).replace(/"/g, '""')}"`;
+          });
+          return row.join(',');
+        })
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        
+        const now = new Date();
+        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+        const fullFilename = `${filename}-${timestamp}.csv`;
+        
+        link.setAttribute('download', fullFilename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showSuccess(`${headers.length > 0 ? filename.charAt(0).toUpperCase() + filename.slice(1) : 'Data'} exported to ${fullFilename}`);
+      }
+    } catch (error) {
+      console.error('Quick export CSV failed:', error);
+      showError(`Export failed: ${error}`);
+    }
+  }, [activeTab, cables, ioPoints, loads, conduits, trays, showSuccess, showError]);
+
   const handleFiltersChange = useCallback((filters: {
     searchTerm: string;
     selectedFunction: string;
@@ -1031,6 +1275,9 @@ function App() {
         onExport={handleExport}
         onMultiSheetExport={handleMultiSheetExport}
         onImport={handleImport}
+        onQuickExportAll={handleQuickExportAll}
+        onQuickExportSummary={handleQuickExportSummary}
+        onQuickExportCSV={handleQuickExportCSV}
         currentViewStats={currentViewStats}
         projectTotals={projectTotals}
         validationCounts={validationCounts}

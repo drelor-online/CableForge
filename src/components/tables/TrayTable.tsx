@@ -497,12 +497,17 @@ const TrayTable: React.FC<TrayTableProps> = ({
       if (!data.id && isAddingNew) {
         const trayData: Tray = {
           ...data,
-          [colDef.field!]: newValue
+          [colDef.field!]: newValue,
+          createdAt: new Date(),
+          updatedAt: new Date()
         };
         
-        // Save to database
+        // Save to database - use onTrayUpdate with special id -1 to indicate new record
         onTrayUpdate(-1, trayData);
         setIsAddingNew(false);
+        
+        // Remove the temporary row from filtered data since it will be added properly via props
+        setFilteredTrays(prev => prev.filter((_, index) => index !== 0 || prev[0].id));
       } else if (data.id) {
         // Existing tray, update normally
         const updates: Partial<Tray> = {
@@ -646,13 +651,94 @@ const TrayTable: React.FC<TrayTableProps> = ({
           selectedCount={selectedTrays.length}
           entityName="tray"
           onBulkEdit={onBulkEdit}
-          onBulkDelete={() => {
-            // TODO: Implement bulk delete for trays
-            console.log('Bulk delete trays:', selectedTrays);
+          onBulkDelete={async () => {
+            const confirmed = await showConfirm({
+              title: 'Delete Trays',
+              message: `Are you sure you want to delete ${selectedTrays.length} selected trays? This action cannot be undone.`,
+              confirmText: 'Delete All',
+              cancelText: 'Cancel',
+              type: 'danger'
+            });
+
+            if (confirmed) {
+              try {
+                for (const trayId of selectedTrays) {
+                  onTrayDelete(trayId);
+                }
+                showSuccess(`Successfully deleted ${selectedTrays.length} trays`);
+                onSelectionChange([]);
+              } catch (error) {
+                showError(`Failed to delete trays: ${error}`);
+              }
+            }
           }}
           onBulkExport={() => {
-            // TODO: Implement bulk export for trays
-            console.log('Bulk export trays:', selectedTrays);
+            // Export only selected trays
+            const selectedTrayData = filteredTrays.filter(tray => selectedTrays.includes(tray.id!));
+            
+            try {
+              const headers = [
+                'Tag',
+                'Type',
+                'Width (mm)',
+                'Height (mm)',
+                'Length (m)',
+                'Material',
+                'Fill Percentage',
+                'Max Fill Percentage',
+                'From Location',
+                'To Location',
+                'Elevation (mm)',
+                'Support Spacing (mm)',
+                'Load Rating (kg/m)',
+                'Finish',
+                'Notes'
+              ];
+
+              const csvContent = [
+                headers.join(','),
+                ...selectedTrayData.map(tray => [
+                  `"${tray.tag || ''}"`,
+                  `"${tray.type || ''}"`,
+                  tray.width || '',
+                  tray.height || '',
+                  tray.length || '',
+                  `"${tray.material || ''}"`,
+                  tray.fillPercentage || '',
+                  tray.maxFillPercentage || '',
+                  `"${tray.fromLocation || ''}"`,
+                  `"${tray.toLocation || ''}"`,
+                  tray.elevation || '',
+                  tray.supportSpacing || '',
+                  tray.loadRating || '',
+                  `"${tray.finish || ''}"`,
+                  `"${tray.notes?.replace(/"/g, '""') || ''}"`
+                ].join(','))
+              ].join('\n');
+
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement('a');
+              
+              if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                
+                const now = new Date();
+                const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `selected-trays-${timestamp}.csv`;
+                
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                showSuccess(`Exported ${selectedTrayData.length} selected trays to ${filename}`);
+              }
+            } catch (error) {
+              console.error('Export failed:', error);
+              showError(`Export failed: ${error}`);
+            }
           }}
           onClearSelection={() => {
             onSelectionChange([]);
@@ -673,6 +759,7 @@ const TrayTable: React.FC<TrayTableProps> = ({
           columnDefs={columnDefinitions}
           onGridReady={onGridReady}
           onCellValueChanged={handleRowValueChanged}
+          onRowValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
           rowSelection="multiple"
           suppressRowClickSelection={true}

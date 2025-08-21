@@ -50,6 +50,10 @@ interface AppShellProps {
   onSaveProjectAs?: () => void;
   onOpenProject?: () => void;
   onSaveAsTemplate?: () => void;
+  // Quick export handlers
+  onQuickExportAll?: () => void;
+  onQuickExportSummary?: () => void;
+  onQuickExportCSV?: () => void;
 }
 
 const AppShell: React.FC<AppShellProps> = ({
@@ -71,7 +75,10 @@ const AppShell: React.FC<AppShellProps> = ({
   onSaveProject,
   onSaveProjectAs,
   onOpenProject,
-  onSaveAsTemplate
+  onSaveAsTemplate,
+  onQuickExportAll,
+  onQuickExportSummary,
+  onQuickExportCSV
 }) => {
 
 
@@ -94,6 +101,9 @@ const AppShell: React.FC<AppShellProps> = ({
         onSaveProjectAs={onSaveProjectAs}
         onOpenProject={onOpenProject}
         onSaveAsTemplate={onSaveAsTemplate}
+        onQuickExportAll={onQuickExportAll}
+        onQuickExportSummary={onQuickExportSummary}
+        onQuickExportCSV={onQuickExportCSV}
         isLoading={appState.isLoading}
       />
       

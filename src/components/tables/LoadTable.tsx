@@ -433,12 +433,17 @@ const LoadTable: React.FC<LoadTableProps> = ({
       if (!data.id && isAddingNew) {
         const loadData: Load = {
           ...data,
-          [colDef.field!]: newValue
+          [colDef.field!]: newValue,
+          createdAt: new Date(),
+          updatedAt: new Date()
         };
         
-        // Save to database
+        // Save to database - use onLoadUpdate with special id -1 to indicate new record
         onLoadUpdate(-1, loadData);
         setIsAddingNew(false);
+        
+        // Remove the temporary row from filtered data since it will be added properly via props
+        setFilteredLoads(prev => prev.filter((_, index) => index !== 0 || prev[0].id));
       } else if (data.id) {
         // Existing load, update normally
         const updates: Partial<Load> = {
@@ -520,13 +525,94 @@ const LoadTable: React.FC<LoadTableProps> = ({
           selectedCount={selectedLoads.length}
           entityName="load"
           onBulkEdit={onBulkEdit}
-          onBulkDelete={() => {
-            // TODO: Implement bulk delete for loads
-            console.log('Bulk delete loads:', selectedLoads);
+          onBulkDelete={async () => {
+            const confirmed = await showConfirm({
+              title: 'Delete Loads',
+              message: `Are you sure you want to delete ${selectedLoads.length} selected loads? This action cannot be undone.`,
+              confirmText: 'Delete All',
+              cancelText: 'Cancel',
+              type: 'danger'
+            });
+
+            if (confirmed) {
+              try {
+                for (const loadId of selectedLoads) {
+                  onLoadDelete(loadId);
+                }
+                showSuccess(`Successfully deleted ${selectedLoads.length} loads`);
+                onSelectionChange([]);
+              } catch (error) {
+                showError(`Failed to delete loads: ${error}`);
+              }
+            }
           }}
           onBulkExport={() => {
-            // TODO: Implement bulk export for loads
-            console.log('Bulk export loads:', selectedLoads);
+            // Export only selected loads
+            const selectedLoadData = filteredLoads.filter(load => selectedLoads.includes(load.id!));
+            
+            try {
+              const headers = [
+                'Tag',
+                'Description',
+                'Load Type',
+                'Power (kW)',
+                'Power (HP)',
+                'Voltage',
+                'Current',
+                'Power Factor',
+                'Demand Load (kW)',
+                'Connected Load (kW)',
+                'Efficiency',
+                'Feeder Cable',
+                'Starter Type',
+                'Protection Type',
+                'Notes'
+              ];
+
+              const csvContent = [
+                headers.join(','),
+                ...selectedLoadData.map(load => [
+                  `"${load.tag || ''}"`,
+                  `"${load.description || ''}"`,
+                  `"${load.loadType || ''}"`,
+                  load.powerKw || '',
+                  load.powerHp || '',
+                  load.voltage || '',
+                  load.current || '',
+                  load.powerFactor || '',
+                  load.demandLoadKw || '',
+                  load.connectedLoadKw || '',
+                  load.efficiency || '',
+                  `"${load.feederCable || ''}"`,
+                  `"${load.starterType || ''}"`,
+                  `"${load.protectionType || ''}"`,
+                  `"${load.notes?.replace(/"/g, '""') || ''}"`
+                ].join(','))
+              ].join('\n');
+
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement('a');
+              
+              if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                
+                const now = new Date();
+                const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `selected-loads-${timestamp}.csv`;
+                
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                showSuccess(`Exported ${selectedLoadData.length} selected loads to ${filename}`);
+              }
+            } catch (error) {
+              console.error('Export failed:', error);
+              showError(`Export failed: ${error}`);
+            }
           }}
           onClearSelection={() => {
             onSelectionChange([]);
@@ -549,6 +635,7 @@ const LoadTable: React.FC<LoadTableProps> = ({
           suppressRowClickSelection={true}
           onGridReady={onGridReady}
           onCellValueChanged={handleRowValueChanged}
+          onRowValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
           getRowId={(params) => params.data.id?.toString() || params.data.tag || Math.random().toString()}
           headerHeight={32}

@@ -446,12 +446,17 @@ const ConduitTable: React.FC<ConduitTableProps> = ({
       if (!data.id && isAddingNew) {
         const conduitData: Conduit = {
           ...data,
-          [colDef.field!]: newValue
+          [colDef.field!]: newValue,
+          createdAt: new Date(),
+          updatedAt: new Date()
         };
         
-        // Save to database
+        // Save to database - use onConduitUpdate with special id -1 to indicate new record
         onConduitUpdate(-1, conduitData);
         setIsAddingNew(false);
+        
+        // Remove the temporary row from filtered data since it will be added properly via props
+        setFilteredConduits(prev => prev.filter((_, index) => index !== 0 || prev[0].id));
       } else if (data.id) {
         // Existing conduit, update normally
         const updates: Partial<Conduit> = {
@@ -538,13 +543,82 @@ const ConduitTable: React.FC<ConduitTableProps> = ({
           selectedCount={selectedConduits.length}
           entityName="conduit"
           onBulkEdit={onBulkEdit}
-          onBulkDelete={() => {
-            // TODO: Implement bulk delete for conduits
-            console.log('Bulk delete conduits:', selectedConduits);
+          onBulkDelete={async () => {
+            const confirmed = await showConfirm({
+              title: 'Delete Conduits',
+              message: `Are you sure you want to delete ${selectedConduits.length} selected conduits? This action cannot be undone.`,
+              confirmText: 'Delete All',
+              cancelText: 'Cancel',
+              type: 'danger'
+            });
+
+            if (confirmed) {
+              try {
+                for (const conduitId of selectedConduits) {
+                  onConduitDelete(conduitId);
+                }
+                showSuccess(`Successfully deleted ${selectedConduits.length} conduits`);
+                onSelectionChange([]);
+              } catch (error) {
+                showError(`Failed to delete conduits: ${error}`);
+              }
+            }
           }}
           onBulkExport={() => {
-            // TODO: Implement bulk export for conduits
-            console.log('Bulk export conduits:', selectedConduits);
+            // Export only selected conduits
+            const selectedConduitData = filteredConduits.filter(conduit => selectedConduits.includes(conduit.id!));
+            
+            try {
+              const headers = [
+                'Tag',
+                'Type',
+                'Size',
+                'Internal Diameter (mm)',
+                'Fill Percentage',
+                'Max Fill Percentage',
+                'From Location',
+                'To Location',
+                'Notes'
+              ];
+
+              const csvContent = [
+                headers.join(','),
+                ...selectedConduitData.map(conduit => [
+                  `"${conduit.tag || ''}"`,
+                  `"${conduit.type || ''}"`,
+                  `"${conduit.size || ''}"`,
+                  conduit.internalDiameter || '',
+                  conduit.fillPercentage || '',
+                  conduit.maxFillPercentage || '',
+                  `"${conduit.fromLocation || ''}"`,
+                  `"${conduit.toLocation || ''}"`,
+                  `"${conduit.notes?.replace(/"/g, '""') || ''}"`
+                ].join(','))
+              ].join('\n');
+
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement('a');
+              
+              if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                
+                const now = new Date();
+                const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `selected-conduits-${timestamp}.csv`;
+                
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                showSuccess(`Exported ${selectedConduitData.length} selected conduits to ${filename}`);
+              }
+            } catch (error) {
+              console.error('Export failed:', error);
+              showError(`Export failed: ${error}`);
+            }
           }}
           onClearSelection={() => {
             onSelectionChange([]);
@@ -567,6 +641,7 @@ const ConduitTable: React.FC<ConduitTableProps> = ({
           suppressRowClickSelection={true}
           onGridReady={onGridReady}
           onCellValueChanged={handleRowValueChanged}
+          onRowValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
           getRowId={(params) => params.data.id?.toString() || params.data.tag || Math.random().toString()}
           headerHeight={32}

@@ -25,6 +25,10 @@ interface CompactHeaderProps {
   onSaveProjectAs?: () => void;
   onOpenProject?: () => void;
   onSaveAsTemplate?: () => void;
+  // Quick export handlers
+  onQuickExportAll?: () => void;
+  onQuickExportSummary?: () => void;
+  onQuickExportCSV?: () => void;
   isLoading?: boolean;
 }
 
@@ -44,6 +48,9 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
   onSaveProjectAs,
   onOpenProject,
   onSaveAsTemplate,
+  onQuickExportAll,
+  onQuickExportSummary,
+  onQuickExportCSV,
   isLoading = false
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -221,33 +228,39 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
                   {/* Quick Export Options */}
                   <div className="px-4 py-2">
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Quick Export</div>
-                    <button
-                      onClick={() => {
-                        // TODO: Quick export all data
-                        setShowExportMenu(false);
-                      }}
-                      className="w-full text-left text-xs text-gray-600 hover:text-gray-800 py-1"
-                    >
-                      ↗ Export All Data
-                    </button>
-                    <button
-                      onClick={() => {
-                        // TODO: Quick export summary
-                        setShowExportMenu(false);
-                      }}
-                      className="w-full text-left text-xs text-gray-600 hover:text-gray-800 py-1"
-                    >
-                      📊 Summary Report Only
-                    </button>
-                    <button
-                      onClick={() => {
-                        // TODO: Quick export to CSV
-                        setShowExportMenu(false);
-                      }}
-                      className="w-full text-left text-xs text-gray-600 hover:text-gray-800 py-1"
-                    >
-                      📄 Export to CSV
-                    </button>
+                    {onQuickExportAll && (
+                      <button
+                        onClick={() => {
+                          onQuickExportAll();
+                          setShowExportMenu(false);
+                        }}
+                        className="w-full text-left text-xs text-gray-600 hover:text-gray-800 py-1"
+                      >
+                        ↗ Export All Data
+                      </button>
+                    )}
+                    {onQuickExportSummary && (
+                      <button
+                        onClick={() => {
+                          onQuickExportSummary();
+                          setShowExportMenu(false);
+                        }}
+                        className="w-full text-left text-xs text-gray-600 hover:text-gray-800 py-1"
+                      >
+                        📊 Summary Report Only
+                      </button>
+                    )}
+                    {onQuickExportCSV && (
+                      <button
+                        onClick={() => {
+                          onQuickExportCSV();
+                          setShowExportMenu(false);
+                        }}
+                        className="w-full text-left text-xs text-gray-600 hover:text-gray-800 py-1"
+                      >
+                        📄 Export to CSV
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

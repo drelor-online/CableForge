@@ -495,12 +495,17 @@ const IOTable: React.FC<IOTableProps> = ({
       if (!data.id && isAddingNew) {
         const ioData: IOPoint = {
           ...data,
-          [field]: newValue
+          [field]: newValue,
+          createdAt: new Date(),
+          updatedAt: new Date()
         };
         
-        // Save to database
+        // Save to database - use onIOPointUpdate with special id -1 to indicate new record
         onIOPointUpdate(-1, ioData);
         setIsAddingNew(false);
+        
+        // Remove the temporary row from filtered data since it will be added properly via props
+        setFilteredIOPoints(prev => prev.filter((_, index) => index !== 0 || prev[0].id));
       } else if (data.id) {
         // Existing I/O point, update normally
         const updates: Partial<IOPoint> = {
@@ -839,6 +844,7 @@ const IOTable: React.FC<IOTableProps> = ({
           defaultColDef={defaultColDef}
           onGridReady={onGridReady}
           onCellValueChanged={handleRowValueChanged}
+          onRowValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
           rowSelection="multiple"
           suppressRowClickSelection={true}
