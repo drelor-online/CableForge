@@ -1,0 +1,241 @@
+{
+  "presets": [
+    {
+      "id": "standard-cable-schedule",
+      "name": "Standard Cable Schedule",
+      "description": "Basic cable schedule for documentation",
+      "category": "documentation",
+      "options": {
+        "format": "xlsx",
+        "includeHidden": false,
+        "sheetName": "Cable Schedule",
+        "selectedColumns": [
+          "tag", "description", "fromEquipment", "toEquipment", 
+          "function", "voltage", "cableType", "size", "cores", "length", "route"
+        ]
+      }
+    },
+    {
+      "id": "installation-list",
+      "name": "Installation List",
+      "description": "Cable list for field installation crews",
+      "category": "installation",
+      "options": {
+        "format": "xlsx", 
+        "includeHidden": false,
+        "sheetName": "Installation List",
+        "selectedColumns": [
+          "tag", "description", "fromLocation", "toLocation", 
+          "cableType", "size", "cores", "length", "route", "notes"
+        ]
+      }
+    },
+    {
+      "id": "procurement-list",
+      "name": "Procurement List",
+      "description": "Cable list for purchasing and material takeoff",
+      "category": "procurement",
+      "options": {
+        "format": "xlsx",
+        "includeHidden": false, 
+        "sheetName": "Material List",
+        "selectedColumns": [
+          "cableType", "size", "cores", "manufacturer", "partNumber", "length"
+        ]
+      }
+    },
+    {
+      "id": "testing-checklist",
+      "name": "Testing Checklist", 
+      "description": "Cable testing and commissioning checklist",
+      "category": "testing",
+      "options": {
+        "format": "xlsx",
+        "includeHidden": false,
+        "sheetName": "Test Results",
+        "selectedColumns": [
+          "tag", "description", "fromEquipment", "toEquipment",
+          "function", "voltage", "segregationClass", "route"
+        ]
+      }
+    },
+    {
+      "id": "power-cable-summary",
+      "name": "Power Cable Summary",
+      "description": "Power distribution cable summary",
+      "category": "power",
+      "options": {
+        "format": "xlsx",
+        "includeHidden": false,
+        "sheetName": "Power Cables", 
+        "selectedColumns": [
+          "tag", "description", "fromEquipment", "toEquipment",
+          "voltage", "current", "cableType", "size", "cores", "length"
+        ]
+      }
+    },
+    {
+      "id": "instrument-cable-summary", 
+      "name": "Instrument Cable Summary",
+      "description": "Instrumentation cable summary",
+      "category": "instrumentation",
+      "options": {
+        "format": "xlsx",
+        "includeHidden": false,
+        "sheetName": "Instrument Cables",
+        "selectedColumns": [
+          "tag", "description", "fromEquipment", "toEquipment", 
+          "function", "cableType", "cores", "segregationClass", "route"
+        ]
+      }
+    },
+    {
+      "id": "fiber-optic-summary",
+      "name": "Fiber Optic Summary", 
+      "description": "Fiber optic cable summary",
+      "category": "communications",
+      "options": {
+        "format": "xlsx",
+        "includeHidden": false,
+        "sheetName": "Fiber Cables",
+        "selectedColumns": [
+          "tag", "description", "fromEquipment", "toEquipment",
+          "cableType", "cores", "length", "route", "manufacturer", "partNumber"
+        ]
+      }
+    },
+    {
+      "id": "maintenance-schedule",
+      "name": "Maintenance Schedule",
+      "description": "Cable maintenance and inspection schedule", 
+      "category": "maintenance",
+      "options": {
+        "format": "xlsx",
+        "includeHidden": false,
+        "sheetName": "Maintenance Schedule",
+        "selectedColumns": [
+          "tag", "description", "function", "route", "length", 
+          "segregationClass", "notes"
+        ]
+      }
+    },
+    {
+      "id": "regulatory-submission",
+      "name": "Regulatory Submission",
+      "description": "Complete cable data for regulatory submissions",
+      "category": "compliance",
+      "options": {
+        "format": "xlsx",
+        "includeHidden": true,
+        "sheetName": "Cable Data",
+        "selectedColumns": [
+          "tag", "description", "fromEquipment", "toEquipment", 
+          "fromLocation", "toLocation", "function", "voltage", "current",
+          "cableType", "size", "cores", "length", "route", "segregationClass",
+          "manufacturer", "partNumber", "sparePercentage", "notes"
+        ]
+      }
+    },
+    {
+      "id": "quick-csv-export",
+      "name": "Quick CSV Export",
+      "description": "Simple CSV export for data analysis",
+      "category": "analysis", 
+      "options": {
+        "format": "csv",
+        "includeHidden": false,
+        "selectedColumns": [
+          "tag", "description", "fromEquipment", "toEquipment", 
+          "function", "voltage", "cableType", "length"
+        ]
+      }
+    },
+    {
+      "id": "cad-import-format",
+      "name": "CAD Import Format",
+      "description": "Format suitable for CAD software import", 
+      "category": "cad",
+      "options": {
+        "format": "xlsx",
+        "includeHidden": false,
+        "sheetName": "CAD_Import",
+        "selectedColumns": [
+          "tag", "fromEquipment", "toEquipment", "cableType", 
+          "size", "length", "route"
+        ]
+      }
+    },
+    {
+      "id": "voltage-drop-analysis",
+      "name": "Voltage Drop Analysis",
+      "description": "Cable data for voltage drop calculations",
+      "category": "analysis",
+      "options": {
+        "format": "xlsx", 
+        "includeHidden": false,
+        "sheetName": "Voltage Drop Data",
+        "selectedColumns": [
+          "tag", "description", "voltage", "current", "cableType",
+          "size", "cores", "length", "calculatedLength", "voltageDropPercentage"
+        ]
+      }
+    }
+  ],
+  "categories": [
+    {
+      "id": "documentation",
+      "name": "Documentation",
+      "description": "General documentation and record keeping"
+    },
+    {
+      "id": "installation", 
+      "name": "Installation",
+      "description": "Field installation and construction"
+    },
+    {
+      "id": "procurement",
+      "name": "Procurement", 
+      "description": "Material purchasing and logistics"
+    },
+    {
+      "id": "testing",
+      "name": "Testing & Commissioning",
+      "description": "Testing, commissioning, and startup"
+    },
+    {
+      "id": "power",
+      "name": "Power Systems",
+      "description": "Power distribution specific exports"
+    },
+    {
+      "id": "instrumentation",
+      "name": "Instrumentation",
+      "description": "Instrumentation and control specific exports" 
+    },
+    {
+      "id": "communications",
+      "name": "Communications",
+      "description": "Communication and fiber optic exports"
+    },
+    {
+      "id": "maintenance",
+      "name": "Maintenance",
+      "description": "Maintenance and lifecycle management"
+    },
+    {
+      "id": "compliance",
+      "name": "Compliance & Regulatory", 
+      "description": "Regulatory and compliance submissions"
+    },
+    {
+      "id": "analysis",
+      "name": "Analysis",
+      "description": "Data analysis and calculations"
+    },
+    {
+      "id": "cad",
+      "name": "CAD Integration",
+      "description": "CAD software integration formats"
+    }
+  ]
+}

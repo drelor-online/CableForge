@@ -1,4 +1,5 @@
 import { SETTINGS_KEYS } from '../types/settings';
+import { FilterConfigService } from '../config/filter-types';
 
 export interface FilterCondition {
   field: string;
@@ -239,46 +240,13 @@ class FilterService {
     return Array.from(new Set(values)).sort();
   }
 
-  // Get filter suggestions based on field type
+  // Get filter suggestions based on field type using centralized configuration
   getFilterSuggestions(field: string, type: FilterCondition['type']): { operator: FilterCondition['operator']; label: string }[] {
-    switch (type) {
-      case 'text':
-        return [
-          { operator: 'contains', label: 'Contains' },
-          { operator: 'not_contains', label: 'Does not contain' },
-          { operator: 'equals', label: 'Equals' },
-          { operator: 'not_equals', label: 'Does not equal' },
-          { operator: 'starts_with', label: 'Starts with' },
-          { operator: 'ends_with', label: 'Ends with' },
-          { operator: 'is_empty', label: 'Is empty' },
-          { operator: 'is_not_empty', label: 'Is not empty' }
-        ];
-      
-      case 'number':
-        return [
-          { operator: 'equals', label: 'Equals' },
-          { operator: 'not_equals', label: 'Does not equal' },
-          { operator: 'greater_than', label: 'Greater than' },
-          { operator: 'less_than', label: 'Less than' },
-          { operator: 'between', label: 'Between' },
-          { operator: 'is_empty', label: 'Is empty' },
-          { operator: 'is_not_empty', label: 'Is not empty' }
-        ];
-      
-      case 'enum':
-        return [
-          { operator: 'in', label: 'Is one of' },
-          { operator: 'not_in', label: 'Is not one of' },
-          { operator: 'is_empty', label: 'Is empty' },
-          { operator: 'is_not_empty', label: 'Is not empty' }
-        ];
-      
-      default:
-        return [
-          { operator: 'equals', label: 'Equals' },
-          { operator: 'not_equals', label: 'Does not equal' }
-        ];
-    }
+    const operators = FilterConfigService.getFieldOperators(field);
+    return operators.map(op => ({
+      operator: op.value as FilterCondition['operator'],
+      label: op.label
+    }));
   }
 
   // Persistence

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Cable, CableFunction, SegregationClass, Tray, Conduit } from '../../types';
 import { useUI } from '../../contexts/UIContext';
 import { TauriDatabaseService } from '../../services/tauri-database';
+import { colors, spacing, typography } from '../../theme';
 
 interface BulkEditModalProps {
   isOpen: boolean;
@@ -307,11 +308,43 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
 
   if (!isOpen) return null;
 
-  const inputClass = "w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent";
-  const disabledInputClass = "w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50 text-gray-400";
-  const errorInputClass = "w-full px-3 py-2 text-sm border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-red-50";
-  const labelClass = "block text-sm font-medium text-gray-700 mb-1";
-  const errorClass = "text-red-600 text-xs mt-1";
+  // Theme-based styles
+  const inputStyle = {
+    width: '100%',
+    padding: `${spacing[2]} ${spacing[3]}`,
+    fontSize: typography.fontSize.sm,
+    border: `1px solid ${colors.gray[300]}`,
+    borderRadius: spacing[1.5],
+    outline: 'none',
+    transition: 'border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
+  };
+  
+  const disabledInputStyle = {
+    ...inputStyle,
+    borderColor: colors.gray[200],
+    backgroundColor: colors.gray[50],
+    color: colors.gray[400],
+  };
+  
+  const errorInputStyle = {
+    ...inputStyle,
+    borderColor: colors.red[300],
+    backgroundColor: colors.red[50],
+  };
+  
+  const labelStyle = {
+    display: 'block',
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.gray[700],
+    marginBottom: spacing[1],
+  };
+  
+  const errorStyle = {
+    color: colors.red[600],
+    fontSize: typography.fontSize.xs,
+    marginTop: spacing[1],
+  };
 
   const getUniqueValues = (field: keyof Cable): string[] => {
     const values = selectedCables
@@ -348,16 +381,46 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+      onClick={onClose}
+    >
       <div 
-        className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4"
+        className="w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+        style={{ 
+          backgroundColor: colors.white,
+          borderRadius: spacing[2],
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          margin: spacing[4]
+        }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div 
+          className="flex items-center justify-between"
+          style={{ 
+            padding: `${spacing[4]} ${spacing[6]}`,
+            borderBottom: `1px solid ${colors.gray[200]}`
+          }}
+        >
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Bulk Edit Cables</h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <h2 
+              style={{
+                fontSize: typography.fontSize.xl,
+                fontWeight: typography.fontWeight.semibold,
+                color: colors.gray[900]
+              }}
+            >
+              Bulk Edit Cables
+            </h2>
+            <p 
+              style={{
+                fontSize: typography.fontSize.sm,
+                color: colors.gray[500],
+                marginTop: spacing[1]
+              }}
+            >
               Editing {selectedCables.length} cable{selectedCables.length !== 1 ? 's' : ''}: {' '}
               {selectedCables.slice(0, 3).map(c => c.tag).join(', ')}
               {selectedCables.length > 3 && ` and ${selectedCables.length - 3} more`}
@@ -365,20 +428,41 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+            style={{
+              padding: spacing[1],
+              color: colors.gray[400],
+              borderRadius: spacing[1],
+              border: 'none',
+              backgroundColor: 'transparent',
+              cursor: 'pointer'
+            }}
             disabled={isLoading}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = colors.gray[600];
+              e.currentTarget.style.backgroundColor = colors.gray[100];
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = colors.gray[400];
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             ✕
           </button>
         </div>
 
         {/* Instructions */}
-        <div className="px-6 py-3 bg-blue-50 border-b border-blue-200">
-          <div className="flex items-start gap-2">
-            <div className="text-blue-600 mt-0.5">ℹ️</div>
-            <div className="text-sm text-blue-800">
-              <p className="font-medium">How bulk edit works:</p>
-              <p className="mt-1">
+        <div 
+          style={{ 
+            padding: `${spacing[3]} ${spacing[6]}`,
+            backgroundColor: colors.blue[50],
+            borderBottom: `1px solid ${colors.blue[200]}`
+          }}
+        >
+          <div className="flex items-start" style={{ gap: spacing[2] }}>
+            <div style={{ color: colors.blue[600], marginTop: spacing[0.5] }}>ℹ️</div>
+            <div style={{ fontSize: typography.fontSize.sm, color: colors.blue[800] }}>
+              <p style={{ fontWeight: typography.fontWeight.medium }}>How bulk edit works:</p>
+              <p style={{ marginTop: spacing[1] }}>
                 Check the fields you want to update, then set their new values. 
                 Only checked fields will be modified. Unchecked fields will remain unchanged.
               </p>
@@ -387,10 +471,24 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
         </div>
 
         {/* Quick Actions */}
-        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+        <div 
+          style={{ 
+            padding: `${spacing[3]} ${spacing[6]}`,
+            backgroundColor: colors.gray[50],
+            borderBottom: `1px solid ${colors.gray[200]}`
+          }}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">Quick Actions:</span>
-            <div className="flex gap-2">
+            <span 
+              style={{
+                fontSize: typography.fontSize.sm,
+                fontWeight: typography.fontWeight.medium,
+                color: colors.gray[700]
+              }}
+            >
+              Quick Actions:
+            </span>
+            <div className="flex" style={{ gap: spacing[2] }}>
               <button
                 type="button"
                 onClick={() => {
@@ -403,7 +501,19 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                     return newState;
                   });
                 }}
-                className="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
+                style={{
+                  padding: `${spacing[1]} ${spacing[3]}`,
+                  fontSize: typography.fontSize.xs,
+                  fontWeight: typography.fontWeight.medium,
+                  color: colors.blue[700],
+                  backgroundColor: colors.blue[100],
+                  borderRadius: spacing[1],
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.15s ease-in-out'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.blue[200]}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.blue[100]}
                 disabled={isLoading}
               >
                 Select Common Fields
@@ -420,7 +530,19 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                     return newState;
                   });
                 }}
-                className="px-3 py-1 text-xs font-medium text-purple-700 bg-purple-100 rounded hover:bg-purple-200 transition-colors"
+                style={{
+                  padding: `${spacing[1]} ${spacing[3]}`,
+                  fontSize: typography.fontSize.xs,
+                  fontWeight: typography.fontWeight.medium,
+                  color: colors.purple[700],
+                  backgroundColor: colors.purple[100],
+                  borderRadius: spacing[1],
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.15s ease-in-out'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.purple[200]}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.purple[100]}
                 disabled={isLoading}
               >
                 Select Routing Properties
@@ -437,7 +559,19 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                     return newState;
                   });
                 }}
-                className="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 rounded hover:bg-green-200 transition-colors"
+                style={{
+                  padding: `${spacing[1]} ${spacing[3]}`,
+                  fontSize: typography.fontSize.xs,
+                  fontWeight: typography.fontWeight.medium,
+                  color: colors.green[700],
+                  backgroundColor: colors.green[100],
+                  borderRadius: spacing[1],
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.15s ease-in-out'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.green[200]}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.green[100]}
                 disabled={isLoading}
               >
                 Select Physical Properties
@@ -469,7 +603,19 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   });
                   setUpdateData({});
                 }}
-                className="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                style={{
+                  padding: `${spacing[1]} ${spacing[3]}`,
+                  fontSize: typography.fontSize.xs,
+                  fontWeight: typography.fontWeight.medium,
+                  color: colors.gray[700],
+                  backgroundColor: colors.gray[100],
+                  borderRadius: spacing[1],
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.15s ease-in-out'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.gray[200]}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.gray[100]}
                 disabled={isLoading}
               >
                 Clear All
@@ -479,8 +625,11 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 py-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <form 
+          onSubmit={handleSubmit} 
+          style={{ padding: `${spacing[4]} ${spacing[6]}` }}
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: spacing[6] }}>
             
             {/* Description */}
             <div>
@@ -492,13 +641,13 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Description</label>
+                <label style={labelStyle}>Description</label>
               </div>
               <input
                 type="text"
                 value={updateData.description || ''}
                 onChange={e => handleInputChange('description', e.target.value)}
-                className={fieldsToUpdate.description ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.description ? inputStyle : disabledInputStyle}
                 placeholder="New description for all selected cables"
                 disabled={!fieldsToUpdate.description || isLoading}
               />
@@ -517,12 +666,12 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Function</label>
+                <label style={labelStyle}>Function</label>
               </div>
               <select
                 value={updateData.function || ''}
                 onChange={e => handleInputChange('function', e.target.value || undefined)}
-                className={fieldsToUpdate.function ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.function ? inputStyle : disabledInputStyle}
                 disabled={!fieldsToUpdate.function || isLoading}
               >
                 <option value="">Select function...</option>
@@ -545,17 +694,17 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Voltage (V)</label>
+                <label style={labelStyle}>Voltage (V)</label>
               </div>
               <input
                 type="number"
                 value={updateData.voltage || ''}
                 onChange={e => handleInputChange('voltage', e.target.value ? Number(e.target.value) : undefined)}
-                className={fieldsToUpdate.voltage ? (errors.voltage ? errorInputClass : inputClass) : disabledInputClass}
+                style={fieldsToUpdate.voltage ? (errors.voltage ? errorInputStyle : inputStyle) : disabledInputStyle}
                 placeholder="e.g., 480"
                 disabled={!fieldsToUpdate.voltage || isLoading}
               />
-              {errors.voltage && <div className={errorClass}>{errors.voltage}</div>}
+              {errors.voltage && <div style={errorStyle}>{errors.voltage}</div>}
               <div className="text-xs text-gray-500 mt-1">
                 Current: {getUniqueValues('voltage').join(', ') || 'Various or empty'}
               </div>
@@ -571,13 +720,13 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Cable Type</label>
+                <label style={labelStyle}>Cable Type</label>
               </div>
               <input
                 type="text"
                 value={updateData.cableType || ''}
                 onChange={e => handleInputChange('cableType', e.target.value)}
-                className={fieldsToUpdate.cableType ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.cableType ? inputStyle : disabledInputStyle}
                 placeholder="e.g., TECK90, THWN-2"
                 disabled={!fieldsToUpdate.cableType || isLoading}
               />
@@ -596,13 +745,13 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Route</label>
+                <label style={labelStyle}>Route</label>
               </div>
               <input
                 type="text"
                 value={updateData.route || ''}
                 onChange={e => handleInputChange('route', e.target.value)}
-                className={fieldsToUpdate.route ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.route ? inputStyle : disabledInputStyle}
                 placeholder="e.g., TR-1, UG-2"
                 disabled={!fieldsToUpdate.route || isLoading}
               />
@@ -621,12 +770,12 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Tray Assignment</label>
+                <label style={labelStyle}>Tray Assignment</label>
               </div>
               <select
                 value={updateData.trayId || ''}
                 onChange={e => handleInputChange('trayId', e.target.value ? Number(e.target.value) : undefined)}
-                className={fieldsToUpdate.trayId ? (errors.trayId ? errorInputClass : inputClass) : disabledInputClass}
+                style={fieldsToUpdate.trayId ? (errors.trayId ? errorInputStyle : inputStyle) : disabledInputStyle}
                 disabled={!fieldsToUpdate.trayId || isLoading}
               >
                 <option value="">No tray assignment</option>
@@ -643,7 +792,7 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   );
                 })}
               </select>
-              {errors.trayId && <div className={errorClass}>{errors.trayId}</div>}
+              {errors.trayId && <div style={errorStyle}>{errors.trayId}</div>}
               <div className="text-xs text-gray-500 mt-1">
                 Current: {getCurrentTrayAssignments()}
               </div>
@@ -659,12 +808,12 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Conduit Assignment</label>
+                <label style={labelStyle}>Conduit Assignment</label>
               </div>
               <select
                 value={updateData.conduitId || ''}
                 onChange={e => handleInputChange('conduitId', e.target.value ? Number(e.target.value) : undefined)}
-                className={fieldsToUpdate.conduitId ? (errors.conduitId ? errorInputClass : inputClass) : disabledInputClass}
+                style={fieldsToUpdate.conduitId ? (errors.conduitId ? errorInputStyle : inputStyle) : disabledInputStyle}
                 disabled={!fieldsToUpdate.conduitId || isLoading}
               >
                 <option value="">No conduit assignment</option>
@@ -681,7 +830,7 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   );
                 })}
               </select>
-              {errors.conduitId && <div className={errorClass}>{errors.conduitId}</div>}
+              {errors.conduitId && <div style={errorStyle}>{errors.conduitId}</div>}
               <div className="text-xs text-gray-500 mt-1">
                 Current: {getCurrentConduitAssignments()}
               </div>
@@ -697,12 +846,12 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Segregation Class</label>
+                <label style={labelStyle}>Segregation Class</label>
               </div>
               <select
                 value={updateData.segregationClass || ''}
                 onChange={e => handleInputChange('segregationClass', e.target.value || undefined)}
-                className={fieldsToUpdate.segregationClass ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.segregationClass ? inputStyle : disabledInputStyle}
                 disabled={!fieldsToUpdate.segregationClass || isLoading}
               >
                 <option value="">Select segregation class...</option>
@@ -725,13 +874,13 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>From Equipment</label>
+                <label style={labelStyle}>From Equipment</label>
               </div>
               <input
                 type="text"
                 value={updateData.fromEquipment || ''}
                 onChange={e => handleInputChange('fromEquipment', e.target.value)}
-                className={fieldsToUpdate.fromEquipment ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.fromEquipment ? inputStyle : disabledInputStyle}
                 placeholder="e.g., MCC-01, Panel A"
                 disabled={!fieldsToUpdate.fromEquipment || isLoading}
               />
@@ -750,13 +899,13 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>To Equipment</label>
+                <label style={labelStyle}>To Equipment</label>
               </div>
               <input
                 type="text"
                 value={updateData.toEquipment || ''}
                 onChange={e => handleInputChange('toEquipment', e.target.value)}
-                className={fieldsToUpdate.toEquipment ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.toEquipment ? inputStyle : disabledInputStyle}
                 placeholder="e.g., Motor M-01, Light L-05"
                 disabled={!fieldsToUpdate.toEquipment || isLoading}
               />
@@ -775,12 +924,12 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Size</label>
+                <label style={labelStyle}>Size</label>
               </div>
               <select
                 value={updateData.size || ''}
                 onChange={e => handleInputChange('size', e.target.value || undefined)}
-                className={fieldsToUpdate.size ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.size ? inputStyle : disabledInputStyle}
                 disabled={!fieldsToUpdate.size || isLoading}
               >
                 <option value="">Select size...</option>
@@ -819,18 +968,18 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Cores</label>
+                <label style={labelStyle}>Cores</label>
               </div>
               <input
                 type="number"
                 value={updateData.cores || ''}
                 onChange={e => handleInputChange('cores', e.target.value ? Number(e.target.value) : undefined)}
-                className={fieldsToUpdate.cores ? (errors.cores ? errorInputClass : inputClass) : disabledInputClass}
+                style={fieldsToUpdate.cores ? (errors.cores ? errorInputStyle : inputStyle) : disabledInputStyle}
                 placeholder="e.g., 3"
                 min="1"
                 disabled={!fieldsToUpdate.cores || isLoading}
               />
-              {errors.cores && <div className={errorClass}>{errors.cores}</div>}
+              {errors.cores && <div style={errorStyle}>{errors.cores}</div>}
               <div className="text-xs text-gray-500 mt-1">
                 Current: {getUniqueValues('cores').join(', ') || 'Various or empty'}
               </div>
@@ -846,19 +995,19 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Length (ft)</label>
+                <label style={labelStyle}>Length (ft)</label>
               </div>
               <input
                 type="number"
                 value={updateData.length || ''}
                 onChange={e => handleInputChange('length', e.target.value ? Number(e.target.value) : undefined)}
-                className={fieldsToUpdate.length ? (errors.length ? errorInputClass : inputClass) : disabledInputClass}
+                style={fieldsToUpdate.length ? (errors.length ? errorInputStyle : inputStyle) : disabledInputStyle}
                 placeholder="e.g., 150"
                 min="0"
                 step="0.1"
                 disabled={!fieldsToUpdate.length || isLoading}
               />
-              {errors.length && <div className={errorClass}>{errors.length}</div>}
+              {errors.length && <div style={errorStyle}>{errors.length}</div>}
               <div className="text-xs text-gray-500 mt-1">
                 Current: {getUniqueValues('length').join(', ') || 'Various or empty'}
               </div>
@@ -874,13 +1023,13 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Manufacturer</label>
+                <label style={labelStyle}>Manufacturer</label>
               </div>
               <input
                 type="text"
                 value={updateData.manufacturer || ''}
                 onChange={e => handleInputChange('manufacturer', e.target.value)}
-                className={fieldsToUpdate.manufacturer ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.manufacturer ? inputStyle : disabledInputStyle}
                 placeholder="e.g., Southwire, General Cable"
                 disabled={!fieldsToUpdate.manufacturer || isLoading}
               />
@@ -899,13 +1048,13 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Part Number</label>
+                <label style={labelStyle}>Part Number</label>
               </div>
               <input
                 type="text"
                 value={updateData.partNumber || ''}
                 onChange={e => handleInputChange('partNumber', e.target.value)}
-                className={fieldsToUpdate.partNumber ? inputClass : disabledInputClass}
+                style={fieldsToUpdate.partNumber ? inputStyle : disabledInputStyle}
                 placeholder="e.g., TC12-3C-600V"
                 disabled={!fieldsToUpdate.partNumber || isLoading}
               />
@@ -925,12 +1074,12 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                   className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <label className={labelClass}>Notes</label>
+                <label style={labelStyle}>Notes</label>
               </div>
               <textarea
                 value={updateData.notes || ''}
                 onChange={e => handleInputChange('notes', e.target.value)}
-                className={`${fieldsToUpdate.notes ? inputClass : disabledInputClass} h-20 resize-none`}
+                style={{...(fieldsToUpdate.notes ? inputStyle : disabledInputStyle), height: '5rem', resize: 'none'}}
                 placeholder="Additional notes or comments for all selected cables"
                 disabled={!fieldsToUpdate.notes || isLoading}
               />
@@ -942,26 +1091,70 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
         </form>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-500">
-            <span className="font-medium">Ctrl+Enter</span> to apply changes |
-            <span className="ml-1">Only checked fields will be updated</span>
+        <div 
+          className="flex items-center justify-between"
+          style={{
+            padding: `${spacing[4]} ${spacing[6]}`,
+            borderTop: `1px solid ${colors.gray[200]}`,
+            backgroundColor: colors.gray[50]
+          }}
+        >
+          <div style={{ fontSize: typography.fontSize.sm, color: colors.gray[500] }}>
+            <span style={{ fontWeight: typography.fontWeight.medium }}>Ctrl+Enter</span> to apply changes |
+            <span style={{ marginLeft: spacing[1] }}>Only checked fields will be updated</span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center" style={{ gap: spacing[3] }}>
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              style={{
+                padding: `${spacing[2]} ${spacing[4]}`,
+                fontSize: typography.fontSize.sm,
+                fontWeight: typography.fontWeight.medium,
+                color: colors.gray[700],
+                backgroundColor: colors.white,
+                border: `1px solid ${colors.gray[300]}`,
+                borderRadius: spacing[1.5],
+                cursor: 'pointer',
+                transition: 'background-color 0.15s ease-in-out'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.gray[50]}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.white}
               disabled={isLoading}
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center"
+              style={{
+                gap: spacing[2],
+                padding: `${spacing[2]} ${spacing[4]}`,
+                fontSize: typography.fontSize.sm,
+                fontWeight: typography.fontWeight.medium,
+                color: colors.white,
+                backgroundColor: colors.primary[600],
+                border: 'none',
+                borderRadius: spacing[1.5],
+                cursor: 'pointer',
+                transition: 'background-color 0.15s ease-in-out',
+                opacity: isLoading ? 0.5 : 1
+              }}
+              onMouseEnter={(e) => !isLoading && (e.currentTarget.style.backgroundColor = colors.primary[700])}
+              onMouseLeave={(e) => !isLoading && (e.currentTarget.style.backgroundColor = colors.primary[600])}
               disabled={isLoading}
             >
-              {isLoading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+              {isLoading && (
+                <div 
+                  className="rounded-full animate-spin"
+                  style={{
+                    width: spacing[4],
+                    height: spacing[4],
+                    border: `2px solid ${colors.white}`,
+                    borderTopColor: 'transparent'
+                  }}
+                ></div>
+              )}
               Update {selectedCables.length} Cable{selectedCables.length !== 1 ? 's' : ''}
             </button>
           </div>

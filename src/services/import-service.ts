@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { Cable } from '../types';
 import { ColumnDefinition } from './column-service';
+import { FieldMappingService } from '../config/import-mappings';
 
 export interface ImportOptions {
   format: 'csv' | 'xlsx';
@@ -407,59 +408,9 @@ class ImportService {
     localStorage.setItem('import-presets', JSON.stringify(presets));
   }
 
-  // Get field suggestions for mapping
+  // Get field suggestions for mapping using centralized configuration
   suggestFieldMapping(headers: string[], columns: ColumnDefinition[]): { [key: string]: string } {
-    const mapping: { [key: string]: string } = {};
-
-    for (const column of columns) {
-      const suggestions = this.getFieldSuggestions(column.field, column.headerName);
-      
-      for (const suggestion of suggestions) {
-        const matchingHeader = headers.find(header => 
-          header.toLowerCase().includes(suggestion.toLowerCase()) ||
-          suggestion.toLowerCase().includes(header.toLowerCase())
-        );
-        
-        if (matchingHeader) {
-          mapping[column.field] = matchingHeader;
-          break;
-        }
-      }
-    }
-
-    return mapping;
-  }
-
-  private getFieldSuggestions(field: string, headerName: string): string[] {
-    const suggestions = [headerName.toLowerCase(), field.toLowerCase()];
-
-    // Add field-specific suggestions
-    switch (field) {
-      case 'tag':
-        suggestions.push('cable tag', 'cable_tag', 'number', 'id', 'identifier');
-        break;
-      case 'description':
-        suggestions.push('desc', 'name', 'title', 'cable description');
-        break;
-      case 'fromEquipment':
-        suggestions.push('from', 'source', 'origin', 'from equipment', 'from_equipment');
-        break;
-      case 'toEquipment':
-        suggestions.push('to', 'destination', 'dest', 'to equipment', 'to_equipment');
-        break;
-      case 'voltage':
-        suggestions.push('volt', 'v', 'voltage rating');
-        break;
-      case 'current':
-        suggestions.push('amp', 'ampere', 'current rating', 'amps');
-        break;
-      case 'cableType':
-        suggestions.push('type', 'cable type', 'cable_type');
-        break;
-      // Add more field-specific suggestions as needed
-    }
-
-    return suggestions;
+    return FieldMappingService.suggestFieldMapping(headers);
   }
 
   private generateId(): string {

@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { ColumnDefinition } from '../../services/column-service';
 import { FilterCondition, filterService } from '../../services/filter-service';
+import { FilterConfigService } from '../../config/filter-types';
 import FilterDropdown from './FilterDropdown';
 
 interface FilterRowProps {
@@ -10,43 +11,9 @@ interface FilterRowProps {
   className?: string;
 }
 
-// Define field types for filtering
+// Get field type using centralized configuration
 const getFieldType = (field: string): FilterCondition['type'] => {
-  switch (field) {
-    case 'tag':
-    case 'description':
-    case 'fromEquipment':
-    case 'toEquipment':
-    case 'fromLocation':
-    case 'toLocation':
-    case 'route':
-    case 'manufacturer':
-    case 'partNumber':
-    case 'notes':
-    case 'cableType':
-      return 'text';
-    
-    case 'voltage':
-    case 'current':
-    case 'cores':
-    case 'length':
-    case 'sparePercentage':
-    case 'calculatedLength':
-    case 'outerDiameter':
-    case 'voltageDropPercentage':
-      return 'number';
-    
-    case 'function':
-    case 'size':
-    case 'segregationClass':
-      return 'enum';
-    
-    case 'segregationWarning':
-      return 'boolean';
-    
-    default:
-      return 'text';
-  }
+  return FilterConfigService.getFieldType(field);
 };
 
 const FilterRow: React.FC<FilterRowProps> = ({

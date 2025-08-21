@@ -1,0 +1,242 @@
+{
+  "presets": [
+    {
+      "id": "standard-cable-schedule",
+      "name": "Standard Cable Schedule",
+      "description": "Common cable schedule format with basic fields",
+      "category": "cable-schedules",
+      "mapping": {
+        "tag": "Cable Tag",
+        "description": "Description",
+        "fromEquipment": "From Equipment",
+        "toEquipment": "To Equipment",
+        "function": "Function",
+        "voltage": "Voltage",
+        "cableType": "Cable Type",
+        "size": "Size",
+        "cores": "Cores",
+        "length": "Length",
+        "route": "Route"
+      },
+      "options": {
+        "hasHeaders": true,
+        "startRow": 1,
+        "skipEmptyRows": true,
+        "overwriteExisting": false
+      }
+    },
+    {
+      "id": "detailed-cable-list",
+      "name": "Detailed Cable List",
+      "description": "Comprehensive cable list with all available fields",
+      "category": "cable-schedules",
+      "mapping": {
+        "tag": "Cable Number",
+        "description": "Cable Description",
+        "fromEquipment": "From",
+        "toEquipment": "To",
+        "fromLocation": "From Location",
+        "toLocation": "To Location",
+        "function": "Cable Function",
+        "voltage": "Rated Voltage",
+        "current": "Rated Current",
+        "cableType": "Type",
+        "size": "Conductor Size",
+        "cores": "Core Count",
+        "length": "Cable Length",
+        "route": "Cable Route",
+        "segregationClass": "Segregation Class",
+        "manufacturer": "Manufacturer",
+        "partNumber": "Part Number",
+        "sparePercentage": "Spare %",
+        "outerDiameter": "OD",
+        "notes": "Notes"
+      },
+      "options": {
+        "hasHeaders": true,
+        "startRow": 1,
+        "skipEmptyRows": true,
+        "overwriteExisting": false
+      }
+    },
+    {
+      "id": "power-cable-import",
+      "name": "Power Cable Import",
+      "description": "Power cable specific import format",
+      "category": "power-cables",
+      "mapping": {
+        "tag": "Cable Tag",
+        "description": "Description",
+        "fromEquipment": "Source Equipment",
+        "toEquipment": "Load Equipment",
+        "function": "Power",
+        "voltage": "System Voltage",
+        "current": "Full Load Current",
+        "cableType": "Cable Type",
+        "size": "AWG/MCM",
+        "cores": "Conductors",
+        "length": "Run Length",
+        "route": "Raceway"
+      },
+      "options": {
+        "hasHeaders": true,
+        "startRow": 2,
+        "skipEmptyRows": true,
+        "overwriteExisting": false
+      }
+    },
+    {
+      "id": "instrument-cable-import",
+      "name": "Instrument Cable Import",
+      "description": "Instrumentation cable import format",
+      "category": "instrument-cables",
+      "mapping": {
+        "tag": "I/O Tag",
+        "description": "Signal Description",
+        "fromEquipment": "Field Device",
+        "toEquipment": "I/O Module",
+        "function": "Instrumentation",
+        "voltage": "Signal Level",
+        "cableType": "Cable Specification",
+        "cores": "Pairs",
+        "length": "Distance",
+        "route": "Cable Tray",
+        "segregationClass": "Separation Class",
+        "notes": "Comments"
+      },
+      "options": {
+        "hasHeaders": true,
+        "startRow": 1,
+        "skipEmptyRows": true,
+        "overwriteExisting": false
+      }
+    },
+    {
+      "id": "fiber-optic-import",
+      "name": "Fiber Optic Import",
+      "description": "Fiber optic cable import format",
+      "category": "fiber-cables",
+      "mapping": {
+        "tag": "Fiber ID",
+        "description": "Link Description",
+        "fromEquipment": "Source Equipment",
+        "toEquipment": "Destination Equipment",
+        "function": "Fiber",
+        "cableType": "Fiber Type",
+        "cores": "Fiber Count",
+        "length": "Link Length",
+        "route": "Fiber Route",
+        "manufacturer": "Vendor",
+        "partNumber": "Model",
+        "notes": "Special Requirements"
+      },
+      "options": {
+        "hasHeaders": true,
+        "startRow": 1,
+        "skipEmptyRows": true,
+        "overwriteExisting": false
+      }
+    },
+    {
+      "id": "eplan-export",
+      "name": "EPLAN Export Format",
+      "description": "Import from EPLAN cable list export",
+      "category": "cad-exports",
+      "mapping": {
+        "tag": "Connection designation",
+        "description": "Function text",
+        "fromEquipment": "Source device designation",
+        "toEquipment": "Target device designation",
+        "cableType": "Article number",
+        "length": "Length",
+        "route": "Installation location",
+        "notes": "Comment"
+      },
+      "options": {
+        "hasHeaders": true,
+        "startRow": 1,
+        "skipEmptyRows": true,
+        "overwriteExisting": false
+      }
+    },
+    {
+      "id": "autocad-electrical-export",
+      "name": "AutoCAD Electrical Export",
+      "description": "Import from AutoCAD Electrical wire list",
+      "category": "cad-exports",
+      "mapping": {
+        "tag": "Wire Number",
+        "description": "Wire Description", 
+        "fromEquipment": "From Component",
+        "toEquipment": "To Component",
+        "cableType": "Wire Type",
+        "size": "Wire Size",
+        "length": "Wire Length",
+        "notes": "Attributes"
+      },
+      "options": {
+        "hasHeaders": true,
+        "startRow": 1,
+        "skipEmptyRows": true,
+        "overwriteExisting": false
+      }
+    },
+    {
+      "id": "contractor-submittal",
+      "name": "Contractor Submittal",
+      "description": "Standard contractor cable submittal format", 
+      "category": "submittals",
+      "mapping": {
+        "tag": "Cable Number",
+        "description": "Description",
+        "fromEquipment": "Origin",
+        "toEquipment": "Termination",
+        "voltage": "Voltage Rating",
+        "cableType": "Construction",
+        "size": "Size",
+        "cores": "Conductors",
+        "manufacturer": "Manufacturer",
+        "partNumber": "Catalog Number",
+        "length": "Approximate Length"
+      },
+      "options": {
+        "hasHeaders": true,
+        "startRow": 3,
+        "skipEmptyRows": true,
+        "overwriteExisting": false
+      }
+    }
+  ],
+  "categories": [
+    {
+      "id": "cable-schedules",
+      "name": "Cable Schedules",
+      "description": "Standard cable schedule formats"
+    },
+    {
+      "id": "power-cables", 
+      "name": "Power Cables",
+      "description": "Power distribution cable lists"
+    },
+    {
+      "id": "instrument-cables",
+      "name": "Instrument Cables", 
+      "description": "Instrumentation and control cables"
+    },
+    {
+      "id": "fiber-cables",
+      "name": "Fiber Optic Cables",
+      "description": "Fiber optic and communication cables"
+    },
+    {
+      "id": "cad-exports",
+      "name": "CAD Exports",
+      "description": "Exports from CAD/design software"
+    },
+    {
+      "id": "submittals",
+      "name": "Submittals",
+      "description": "Contractor and vendor submittals"
+    }
+  ]
+}

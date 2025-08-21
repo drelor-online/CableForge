@@ -1,0 +1,367 @@
+{
+  "presets": [
+    {
+      "id": "power-cables-only",
+      "name": "Power Cables Only",
+      "description": "Show only power distribution cables",
+      "category": "cable-types",
+      "filters": [
+        {
+          "field": "function",
+          "type": "enum",
+          "operator": "in",
+          "values": ["Power"]
+        }
+      ]
+    },
+    {
+      "id": "instrument-cables-only", 
+      "name": "Instrument Cables Only",
+      "description": "Show only instrumentation and control cables",
+      "category": "cable-types",
+      "filters": [
+        {
+          "field": "function",
+          "type": "enum", 
+          "operator": "in",
+          "values": ["Instrumentation", "Control", "Signal"]
+        }
+      ]
+    },
+    {
+      "id": "communication-cables",
+      "name": "Communication Cables",
+      "description": "Show communication and fiber optic cables",
+      "category": "cable-types",
+      "filters": [
+        {
+          "field": "function",
+          "type": "enum",
+          "operator": "in", 
+          "values": ["Communication", "Fiber", "Coax"]
+        }
+      ]
+    },
+    {
+      "id": "high-voltage-cables",
+      "name": "High Voltage Cables (>1000V)",
+      "description": "Show cables with voltage rating above 1000V",
+      "category": "voltage",
+      "filters": [
+        {
+          "field": "voltage",
+          "type": "number",
+          "operator": "greater_than",
+          "value": 1000
+        }
+      ]
+    },
+    {
+      "id": "low-voltage-cables",
+      "name": "Low Voltage Cables (≤1000V)", 
+      "description": "Show cables with voltage rating 1000V and below",
+      "category": "voltage",
+      "filters": [
+        {
+          "field": "voltage",
+          "type": "number",
+          "operator": "less_equal",
+          "value": 1000
+        }
+      ]
+    },
+    {
+      "id": "control-voltage-cables",
+      "name": "Control Voltage (120-480V)",
+      "description": "Show typical control voltage cables",
+      "category": "voltage", 
+      "filters": [
+        {
+          "field": "voltage", 
+          "type": "number",
+          "operator": "between",
+          "value": [120, 480]
+        }
+      ]
+    },
+    {
+      "id": "large-cables",
+      "name": "Large Cables (≥4/0 AWG)",
+      "description": "Show large conductor cables",
+      "category": "size",
+      "filters": [
+        {
+          "field": "size",
+          "type": "enum",
+          "operator": "in",
+          "values": ["4/0 AWG", "250 MCM", "350 MCM", "500 MCM", "750 MCM", "1000 MCM"]
+        }
+      ]
+    },
+    {
+      "id": "multi-core-cables",
+      "name": "Multi-Core Cables (>3 cores)",
+      "description": "Show cables with more than 3 cores",
+      "category": "construction",
+      "filters": [
+        {
+          "field": "cores",
+          "type": "number", 
+          "operator": "greater_than",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "id": "long-runs",
+      "name": "Long Cable Runs (>500ft)",
+      "description": "Show cable runs longer than 500 feet", 
+      "category": "length",
+      "filters": [
+        {
+          "field": "length",
+          "type": "number",
+          "operator": "greater_than",
+          "value": 500
+        }
+      ]
+    },
+    {
+      "id": "short-runs",
+      "name": "Short Cable Runs (<50ft)",
+      "description": "Show short cable runs under 50 feet",
+      "category": "length",
+      "filters": [
+        {
+          "field": "length",
+          "type": "number",
+          "operator": "less_than", 
+          "value": 50
+        }
+      ]
+    },
+    {
+      "id": "segregation-class-1",
+      "name": "Class 1 Segregation",
+      "description": "Show cables requiring Class 1 segregation",
+      "category": "segregation",
+      "filters": [
+        {
+          "field": "segregationClass",
+          "type": "enum",
+          "operator": "in",
+          "values": ["Class 1"]
+        }
+      ]
+    },
+    {
+      "id": "segregation-warnings",
+      "name": "Segregation Warnings",
+      "description": "Show cables with segregation warnings",
+      "category": "segregation",
+      "filters": [
+        {
+          "field": "segregationWarning",
+          "type": "boolean",
+          "operator": "is_true"
+        }
+      ]
+    },
+    {
+      "id": "missing-descriptions",
+      "name": "Missing Descriptions",
+      "description": "Show cables without descriptions",
+      "category": "validation",
+      "filters": [
+        {
+          "field": "description",
+          "type": "text",
+          "operator": "is_empty"
+        }
+      ]
+    },
+    {
+      "id": "missing-routes",
+      "name": "Missing Routes",
+      "description": "Show cables without routing information",
+      "category": "validation", 
+      "filters": [
+        {
+          "field": "route",
+          "type": "text",
+          "operator": "is_empty"
+        }
+      ]
+    },
+    {
+      "id": "incomplete-cables",
+      "name": "Incomplete Cable Data",
+      "description": "Show cables with missing critical information",
+      "category": "validation",
+      "filters": [
+        {
+          "field": "fromEquipment",
+          "type": "text", 
+          "operator": "is_empty"
+        },
+        {
+          "field": "toEquipment",
+          "type": "text",
+          "operator": "is_empty"
+        }
+      ]
+    },
+    {
+      "id": "tray-routed-cables",
+      "name": "Tray Routed Cables",
+      "description": "Show cables routed through cable trays",
+      "category": "routing",
+      "filters": [
+        {
+          "field": "route",
+          "type": "text",
+          "operator": "contains",
+          "value": "tray"
+        }
+      ]
+    },
+    {
+      "id": "conduit-routed-cables",
+      "name": "Conduit Routed Cables", 
+      "description": "Show cables routed through conduits",
+      "category": "routing",
+      "filters": [
+        {
+          "field": "route", 
+          "type": "text",
+          "operator": "contains",
+          "value": "conduit"
+        }
+      ]
+    },
+    {
+      "id": "direct-buried-cables",
+      "name": "Direct Buried Cables",
+      "description": "Show direct buried cables",
+      "category": "routing",
+      "filters": [
+        {
+          "field": "route",
+          "type": "text",
+          "operator": "contains",
+          "value": "buried"
+        }
+      ]
+    },
+    {
+      "id": "motor-circuits",
+      "name": "Motor Circuits",
+      "description": "Show cables connected to motors",
+      "category": "equipment",
+      "filters": [
+        {
+          "field": "toEquipment",
+          "type": "text",
+          "operator": "contains",
+          "value": "motor"
+        }
+      ]
+    },
+    {
+      "id": "panel-connections",
+      "name": "Panel Connections",
+      "description": "Show cables connected to panels or switchboards",
+      "category": "equipment", 
+      "filters": [
+        {
+          "field": "fromEquipment",
+          "type": "text",
+          "operator": "contains",
+          "value": "panel"
+        },
+        {
+          "field": "toEquipment", 
+          "type": "text",
+          "operator": "contains",
+          "value": "panel"
+        }
+      ]
+    },
+    {
+      "id": "recent-additions",
+      "name": "Recently Added Cables",
+      "description": "Show cables added in the last 7 days",
+      "category": "temporal",
+      "filters": [
+        {
+          "field": "createdAt",
+          "type": "date",
+          "operator": "greater_than",
+          "value": "NOW-7d"
+        }
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "id": "cable-types",
+      "name": "Cable Types",
+      "description": "Filter by cable function and type",
+      "icon": "cable"
+    },
+    {
+      "id": "voltage",
+      "name": "Voltage Levels",
+      "description": "Filter by voltage ratings",
+      "icon": "zap"
+    },
+    {
+      "id": "size",
+      "name": "Size & Construction", 
+      "description": "Filter by conductor size and construction",
+      "icon": "ruler"
+    },
+    {
+      "id": "construction",
+      "name": "Construction",
+      "description": "Filter by cable construction details",
+      "icon": "settings"
+    },
+    {
+      "id": "length",
+      "name": "Cable Length",
+      "description": "Filter by cable run length",
+      "icon": "move"
+    },
+    {
+      "id": "segregation",
+      "name": "Segregation",
+      "description": "Filter by segregation requirements",
+      "icon": "shield"
+    },
+    {
+      "id": "validation",
+      "name": "Data Validation",
+      "description": "Find incomplete or missing data",
+      "icon": "alert-triangle"
+    },
+    {
+      "id": "routing",
+      "name": "Cable Routing",
+      "description": "Filter by routing method", 
+      "icon": "route"
+    },
+    {
+      "id": "equipment",
+      "name": "Equipment Connections",
+      "description": "Filter by connected equipment",
+      "icon": "cpu"
+    },
+    {
+      "id": "temporal",
+      "name": "Time-based",
+      "description": "Filter by dates and time periods",
+      "icon": "clock"
+    }
+  ]
+}

@@ -11,7 +11,7 @@ import { FilterCondition, filterService } from '../../services/filter-service';
 import { createColumnDef, createSelectionColumn } from '../../utils/ag-grid-utils';
 import { TauriDatabaseService } from '../../services/tauri-database';
 import { calculationService } from '../../services/calculation-service';
-import UnifiedFilterBar from '../filters/UnifiedFilterBar';
+import CompactFilterBar from '../filters/CompactFilterBar';
 import CableTypeBadge from '../ui/CableTypeBadge';
 import StatusIndicator from '../ui/StatusIndicator';
 import ValidationIndicator from '../ui/ValidationIndicator';
@@ -976,38 +976,11 @@ const CableTable: React.FC<CableTableProps> = ({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Unified Filter Bar */}
-      <UnifiedFilterBar
+      {/* Compact Filter Bar */}
+      <CompactFilterBar
         columns={columnDefinitions}
-        data={cables}
+        data={filteredCables.filter(c => c.id !== -1)} // Exclude empty row from filter data
         onFiltersChange={handleFiltersChange}
-        searchTerm={searchTerm}
-        onSearchChange={(value) => {
-          // Legacy support - this will be handled by the search term prop filtering
-        }}
-        selectedFunction={functionFilter}
-        onFunctionChange={(value) => {
-          // Legacy support - this will be handled by the function filter prop filtering
-        }}
-        selectedVoltage={voltageFilter}
-        onVoltageChange={(value) => {
-          // Legacy support - this will be handled by the voltage filter prop filtering  
-        }}
-        selectedFrom={fromFilter}
-        onFromChange={(value) => {
-          // Legacy support - this will be handled by the from filter prop filtering
-        }}
-        selectedTo={toFilter}
-        onToChange={(value) => {
-          // Legacy support - this will be handled by the to filter prop filtering
-        }}
-        selectedRoute={routeFilter}
-        onRouteChange={(value) => {
-          // Legacy support - this will be handled by the route filter prop filtering
-        }}
-        onClearFilters={() => {
-          // Legacy support - this will be handled by the parent component
-        }}
       />
 
       {/* Compact Table Toolbar */}

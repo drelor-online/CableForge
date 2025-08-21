@@ -5,6 +5,7 @@ import { ExportOptions, ExportPreset, exportService } from '../../services/expor
 import { useColumnSelection } from '../../hooks/useSelectableList';
 import { useAsyncOperation } from '../../hooks/useAsyncOperation';
 import { useToast } from '../common/ToastContainer';
+import { colors, spacing, typography } from '../../theme';
 import { 
   X,
   FileText,
@@ -146,14 +147,47 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-50"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+    >
+      <div 
+        className="w-full max-w-4xl max-h-[90vh] overflow-hidden"
+        style={{
+          backgroundColor: colors.white,
+          borderRadius: spacing[2],
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Export Builder</h2>
+        <div 
+          className="flex items-center justify-between"
+          style={{
+            padding: spacing[6],
+            borderBottom: `1px solid ${colors.gray[200]}`
+          }}
+        >
+          <h2 
+            style={{
+              fontSize: typography.fontSize.xl,
+              fontWeight: typography.fontWeight.semibold,
+              color: colors.gray[900]
+            }}
+          >
+            Export Builder
+          </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            style={{
+              color: colors.gray[400],
+              border: 'none',
+              backgroundColor: 'transparent',
+              cursor: 'pointer',
+              padding: spacing[1],
+              borderRadius: spacing[1]
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = colors.gray[600]}
+            onMouseLeave={(e) => e.currentTarget.style.color = colors.gray[400]}
           >
             <X className="w-6 h-6" />
           </button>
@@ -161,8 +195,23 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
 
         <div className="flex h-[600px]">
           {/* Left Panel - Quick Actions */}
-          <div className="w-1/3 p-6 border-r border-gray-200 bg-gray-50">
-            <h3 className="font-medium text-gray-900 mb-4">Quick Export</h3>
+          <div 
+            className="w-1/3"
+            style={{
+              padding: spacing[6],
+              borderRight: `1px solid ${colors.gray[200]}`,
+              backgroundColor: colors.gray[50]
+            }}
+          >
+            <h3 
+              style={{
+                fontWeight: typography.fontWeight.medium,
+                color: colors.gray[900],
+                marginBottom: spacing[4]
+              }}
+            >
+              Quick Export
+            </h3>
             
             <div className="space-y-3">
               <button
