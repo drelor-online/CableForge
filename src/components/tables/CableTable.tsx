@@ -1,14 +1,17 @@
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, GridReadyEvent, CellValueChangedEvent, SelectionChangedEvent } from 'ag-grid-community';
-import { Cable } from '../../types';
+import { Cable, Tray, Conduit } from '../../types';
 import { ValidationStatus } from '../../types/validation';
 import { validationService } from '../../services/validation-service';
+import { revisionService } from '../../services/revision-service';
 import { autoNumberingService } from '../../services/auto-numbering-service';
 import { ColumnDefinition, columnService } from '../../services/column-service';
 import { FilterCondition, filterService } from '../../services/filter-service';
 import { createColumnDef, createSelectionColumn } from '../../utils/ag-grid-utils';
-import FilterRow from '../filters/FilterRow';
+import { TauriDatabaseService } from '../../services/tauri-database';
+import { calculationService } from '../../services/calculation-service';
+import UnifiedFilterBar from '../filters/UnifiedFilterBar';
 import CableTypeBadge from '../ui/CableTypeBadge';
 import StatusIndicator from '../ui/StatusIndicator';
 import ValidationIndicator from '../ui/ValidationIndicator';
@@ -17,9 +20,12 @@ import BulkActionsBar from './BulkActionsBar';
 import DuplicateCablesModal from '../modals/DuplicateCablesModal';
 import ColumnManagerModal from '../modals/ColumnManagerModal';
 import { useUI } from '../../contexts/UIContext';
+import { Edit2, Trash2, ChevronDown, Calculator, TrendingUp, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 
 interface CableTableProps {
   cables: Cable[];
+  trays: Tray[];
+  conduits: Conduit[];
   onCableUpdate: (id: number, updates: Partial<Cable>) => void;
   onCableDelete: (cableId: number) => void;
   onCableEdit?: (cable: Cable) => void;
@@ -39,6 +45,8 @@ interface CableTableProps {
 
 const CableTable: React.FC<CableTableProps> = ({
   cables,
+  trays,
+  conduits,
   onCableUpdate,
   onCableDelete,
   onCableEdit,
@@ -75,7 +83,14 @@ const CableTable: React.FC<CableTableProps> = ({
   
   // Filter state
   const [activeFilters, setActiveFilters] = useState<FilterCondition[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
+
+  // Voltage drop calculation state
+  const [isCalculatingVoltageDrops, setIsCalculatingVoltageDrops] = useState(false);
+  const [voltageDropProgress, setVoltageDropProgress] = useState<{
+    completed: number;
+    total: number;
+    message: string;
+  } | null>(null);
 
   // Load column settings and filters on mount
   useEffect(() => {
@@ -200,6 +215,16 @@ const CableTable: React.FC<CableTableProps> = ({
         const newCable = await onAddCable(cableData);
         console.log('CableTable: New cable created:', newCable);
         
+        // Track the creation in revision history
+        if (newCable.id) {
+          revisionService.trackChange(
+            'cable',
+            newCable.id,
+            newCable.tag || `Cable ${newCable.id}`,
+            'create'
+          );
+        }
+        
         showSuccess(`Cable ${newCable.tag} created successfully!`);
       } catch (error) {
         console.error('CableTable: Failed to create new cable:', error);
@@ -208,7 +233,49 @@ const CableTable: React.FC<CableTableProps> = ({
     }
     // Handle existing cable updates
     else if (cable.id && field) {
+      const oldValue = event.oldValue;
+      
+      // Track the change in revision history
+      revisionService.trackChange(
+        'cable',
+        cable.id,
+        cable.tag || `Cable ${cable.id}`,
+        'update',
+        field,
+        oldValue,
+        newValue
+      );
+      
       onCableUpdate(cable.id, { [field]: newValue });
+      
+      // Trigger fill recalculation when tray or conduit assignment changes
+      if (field === 'trayId' || field === 'conduitId') {
+        try {
+          const databaseService = TauriDatabaseService.getInstance();
+          
+          // Recalculate fill for the old assignment (if it existed)
+          if (oldValue) {
+            if (field === 'trayId') {
+              await databaseService.recalculateTrayFill(oldValue);
+            } else {
+              await databaseService.recalculateConduitFill(oldValue);
+            }
+          }
+          
+          // Recalculate fill for the new assignment (if it exists)
+          if (newValue) {
+            if (field === 'trayId') {
+              await databaseService.recalculateTrayFill(newValue);
+            } else {
+              await databaseService.recalculateConduitFill(newValue);
+            }
+          }
+          
+          console.log(`Fill recalculation triggered for ${field} change: ${oldValue} → ${newValue}`);
+        } catch (error) {
+          console.error('Failed to recalculate fill percentages:', error);
+        }
+      }
     }
   }, [onCableUpdate, onAddCable, onGetNextTag, showSuccess, showError]);
 
@@ -261,6 +328,14 @@ const CableTable: React.FC<CableTableProps> = ({
 
     if (confirmed && cable.id) {
       try {
+        // Track the deletion in revision history
+        revisionService.trackChange(
+          'cable',
+          cable.id,
+          cable.tag || `Cable ${cable.id}`,
+          'delete'
+        );
+        
         onCableDelete(cable.id);
         showSuccess(`Cable "${cable.tag}" deleted successfully`);
       } catch (error) {
@@ -279,6 +354,19 @@ const CableTable: React.FC<CableTableProps> = ({
 
     if (confirmed) {
       try {
+        // Track deletions in revision history
+        const cablesToDelete = cables.filter(cable => cable.id && selectedCables.includes(cable.id));
+        cablesToDelete.forEach(cable => {
+          if (cable.id) {
+            revisionService.trackChange(
+              'cable',
+              cable.id,
+              cable.tag || `Cable ${cable.id}`,
+              'delete'
+            );
+          }
+        });
+        
         for (const id of selectedCables) {
           onCableDelete(id);
         }
@@ -287,7 +375,7 @@ const CableTable: React.FC<CableTableProps> = ({
         showError(`Failed to delete cables: ${error}`);
       }
     }
-  }, [selectedCables, onCableDelete, showConfirm, showSuccess, showError]);
+  }, [cables, selectedCables, onCableDelete, showConfirm, showSuccess, showError]);
 
   const handleBulkDuplicate = useCallback(() => {
     if (selectedCables.length === 0) return;
@@ -340,13 +428,87 @@ const CableTable: React.FC<CableTableProps> = ({
   }, [showSuccess]);
 
   // Filter handlers
-  const handleToggleFilters = useCallback(() => {
-    setShowFilters(!showFilters);
-  }, [showFilters]);
-
   const handleFiltersChange = useCallback((filters: FilterCondition[]) => {
     setActiveFilters(filters);
   }, []);
+
+  // Calculate voltage drops for all cables
+  const handleCalculateAllVoltageDrops = useCallback(async () => {
+    setIsCalculatingVoltageDrops(true);
+    setVoltageDropProgress({ completed: 0, total: cables.length, message: 'Starting calculations...' });
+
+    try {
+      // Filter cables that have the required data for voltage drop calculation
+      const calculablecables = cables.filter(cable => 
+        cable.id && cable.id !== -1 && 
+        cable.voltage && 
+        cable.length && 
+        cable.size &&
+        (cable.current || cable.function) // Need either current or function to estimate current
+      );
+
+      setVoltageDropProgress({ 
+        completed: 0, 
+        total: calculablecables.length, 
+        message: `Found ${calculablecables.length} cables with sufficient data for calculation` 
+      });
+
+      let completed = 0;
+      const batchSize = 5; // Process in batches to avoid overwhelming the backend
+
+      for (let i = 0; i < calculablecables.length; i += batchSize) {
+        const batch = calculablecables.slice(i, i + batchSize);
+        
+        // Process batch in parallel
+        await Promise.allSettled(
+          batch.map(async (cable) => {
+            try {
+              if (cable.id) {
+                await calculationService.updateCableVoltageDropCalculation(cable.id);
+                completed++;
+                setVoltageDropProgress({ 
+                  completed, 
+                  total: calculablecables.length, 
+                  message: `Calculated voltage drop for ${cable.tag}` 
+                });
+              }
+            } catch (error) {
+              console.error(`Failed to calculate voltage drop for cable ${cable.tag}:`, error);
+            }
+          })
+        );
+      }
+
+      setVoltageDropProgress({ 
+        completed: calculablecables.length, 
+        total: calculablecables.length, 
+        message: 'Calculations complete! Refreshing table...' 
+      });
+
+      // Force grid refresh to show updated values
+      if (gridApi) {
+        gridApi.redrawRows();
+      }
+
+      // Clear progress after a short delay
+      setTimeout(() => {
+        setVoltageDropProgress(null);
+        setIsCalculatingVoltageDrops(false);
+      }, 2000);
+
+    } catch (error) {
+      console.error('Failed to calculate voltage drops:', error);
+      setVoltageDropProgress({ 
+        completed: 0, 
+        total: cables.length, 
+        message: 'Calculation failed. Please try again.' 
+      });
+      setTimeout(() => {
+        setVoltageDropProgress(null);
+        setIsCalculatingVoltageDrops(false);
+      }, 3000);
+    }
+  }, [cables, gridApi]);
 
   // Get validation status for a cable
   const getCableValidationStatus = useCallback((cableId?: number): ValidationStatus => {
@@ -555,6 +717,72 @@ const CableTable: React.FC<CableTableProps> = ({
       cellEditor: 'agTextCellEditor',
     },
     {
+      headerName: 'Tray',
+      field: 'trayId',
+      width: 100,
+      editable: true,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: {
+        values: ['', ...trays.map(t => `${t.tag} (${t.fillPercentage?.toFixed(1) || 0}%)`)]
+      },
+      cellRenderer: (params: any) => {
+        if (!params.value) return '-';
+        const tray = trays.find(t => t.id === params.value);
+        if (!tray) return '-';
+        const fillColor = tray.fillPercentage > 80 ? 'text-red-600' : tray.fillPercentage > 50 ? 'text-yellow-600' : 'text-green-600';
+        return (
+          <span className={`text-sm ${fillColor}`} title={`Fill: ${tray.fillPercentage?.toFixed(1) || 0}%`}>
+            {tray.tag}
+          </span>
+        );
+      },
+      valueSetter: (params: any) => {
+        const value = params.newValue;
+        if (value && value.includes('(')) {
+          // Extract tray tag from "TAG (fill%)" format
+          const tag = value.split(' (')[0];
+          const tray = trays.find(t => t.tag === tag);
+          params.data.trayId = tray?.id || null;
+        } else {
+          params.data.trayId = null;
+        }
+        return true;
+      }
+    },
+    {
+      headerName: 'Conduit',
+      field: 'conduitId',
+      width: 100,
+      editable: true,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: {
+        values: ['', ...conduits.map(c => `${c.tag} (${c.fillPercentage?.toFixed(1) || 0}%)`)]
+      },
+      cellRenderer: (params: any) => {
+        if (!params.value) return '-';
+        const conduit = conduits.find(c => c.id === params.value);
+        if (!conduit) return '-';
+        const fillColor = conduit.fillPercentage > 80 ? 'text-red-600' : conduit.fillPercentage > 50 ? 'text-yellow-600' : 'text-green-600';
+        return (
+          <span className={`text-sm ${fillColor}`} title={`Fill: ${conduit.fillPercentage?.toFixed(1) || 0}%`}>
+            {conduit.tag}
+          </span>
+        );
+      },
+      valueSetter: (params: any) => {
+        const value = params.newValue;
+        if (value && value.includes('(')) {
+          // Extract conduit tag from "TAG (fill%)" format
+          const tag = value.split(' (')[0];
+          const conduit = conduits.find(c => c.tag === tag);
+          params.data.conduitId = conduit?.id || null;
+        } else {
+          params.data.conduitId = null;
+        }
+        return true;
+      }
+    },
+    {
       headerName: 'Status',
       field: 'status',
       width: 100,
@@ -588,26 +816,104 @@ const CableTable: React.FC<CableTableProps> = ({
           { 
             label: 'Edit', 
             onClick: () => onCableEdit?.(cable),
-            icon: '✏️'
+            icon: <Edit2 className="h-4 w-4" />
           },
           { 
             label: 'Delete', 
             onClick: () => handleDeleteCable(cable),
-            icon: '🗑️',
+            icon: <Trash2 className="h-4 w-4" />,
             variant: 'danger' as const
           }
         ];
         return <KebabMenu items={menuItems} />;
       }
     }
-  ], [columnDefinitions, onCableEdit, handleDeleteCable, getCableValidationStatus]);
+  ], [columnDefinitions, trays, conduits, onCableEdit, handleDeleteCable, getCableValidationStatus]);
+
+  // Custom column creation function that handles tray/conduit assignments
+  const createCustomColumnDef = useCallback((colDef: ColumnDefinition): ColDef => {
+    if (colDef.field === 'trayId') {
+      return {
+        headerName: colDef.headerName,
+        field: colDef.field,
+        width: colDef.width || 100,
+        hide: !colDef.visible,
+        editable: true,
+        cellEditor: 'agSelectCellEditor',
+        cellEditorParams: {
+          values: ['', ...trays.map(t => `${t.tag} (${t.fillPercentage?.toFixed(1) || 0}%)`)]
+        },
+        cellRenderer: (params: any) => {
+          if (!params.value) return '-';
+          const tray = trays.find(t => t.id === params.value);
+          if (!tray) return '-';
+          const fillColor = tray.fillPercentage > 80 ? 'text-red-600' : tray.fillPercentage > 50 ? 'text-yellow-600' : 'text-green-600';
+          return (
+            <span className={`text-sm ${fillColor}`} title={`Fill: ${tray.fillPercentage?.toFixed(1) || 0}%`}>
+              {tray.tag}
+            </span>
+          );
+        },
+        valueSetter: (params: any) => {
+          const value = params.newValue;
+          if (value && value.includes('(')) {
+            const tag = value.split(' (')[0];
+            const tray = trays.find(t => t.tag === tag);
+            params.data.trayId = tray?.id || null;
+          } else {
+            params.data.trayId = null;
+          }
+          return true;
+        }
+      };
+    }
+    
+    if (colDef.field === 'conduitId') {
+      return {
+        headerName: colDef.headerName,
+        field: colDef.field,
+        width: colDef.width || 100,
+        hide: !colDef.visible,
+        editable: true,
+        cellEditor: 'agSelectCellEditor',
+        cellEditorParams: {
+          values: ['', ...conduits.map(c => `${c.tag} (${c.fillPercentage?.toFixed(1) || 0}%)`)]
+        },
+        cellRenderer: (params: any) => {
+          if (!params.value) return '-';
+          const conduit = conduits.find(c => c.id === params.value);
+          if (!conduit) return '-';
+          const fillColor = conduit.fillPercentage > 80 ? 'text-red-600' : conduit.fillPercentage > 50 ? 'text-yellow-600' : 'text-green-600';
+          return (
+            <span className={`text-sm ${fillColor}`} title={`Fill: ${conduit.fillPercentage?.toFixed(1) || 0}%`}>
+              {conduit.tag}
+            </span>
+          );
+        },
+        valueSetter: (params: any) => {
+          const value = params.newValue;
+          if (value && value.includes('(')) {
+            const tag = value.split(' (')[0];
+            const conduit = conduits.find(c => c.tag === tag);
+            params.data.conduitId = conduit?.id || null;
+          } else {
+            params.data.conduitId = null;
+          }
+          return true;
+        }
+      };
+    }
+    
+    // Use the standard column creation for other fields
+    return createColumnDef(colDef);
+  }, [trays, conduits]);
 
   // Dynamic column definitions (replacing the static ones above)
   const dynamicColumnDefs: ColDef[] = useMemo(() => {
     if (columnDefinitions.length === 0) return [];
     
     const visibleColumns = columnService.getVisibleColumns(columnDefinitions);
-    const dynamicColumns = visibleColumns.map(colDef => createColumnDef(colDef));
+    const dynamicColumns = visibleColumns.map(colDef => createCustomColumnDef(colDef));
     
     // Add selection column and actions column
     const columns = [
@@ -637,13 +943,13 @@ const CableTable: React.FC<CableTableProps> = ({
                   {
                     label: 'Edit',
                     onClick: () => onCableEdit?.(cable),
-                    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    icon: <Edit2 className="h-4 w-4" />
                   },
                   {
                     label: 'Delete',
                     onClick: () => handleDeleteCable(cable),
                     variant: 'danger' as const,
-                    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    icon: <Trash2 className="h-4 w-4" />
                   }
                 ]}
               />
@@ -654,7 +960,7 @@ const CableTable: React.FC<CableTableProps> = ({
     ];
     
     return columns;
-  }, [columnDefinitions, onCableEdit, handleDeleteCable, getCableValidationStatus]);
+  }, [columnDefinitions, createCustomColumnDef, onCableEdit, handleDeleteCable, getCableValidationStatus]);
 
   // Default column definition
   const defaultColDef: ColDef = {
@@ -670,48 +976,112 @@ const CableTable: React.FC<CableTableProps> = ({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Table Toolbar */}
-      <div className="flex items-center justify-end gap-2 p-2 bg-gray-50 border-b border-gray-200">
-        <button
-          onClick={handleToggleFilters}
-          className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-medium border rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-            showFilters 
-              ? 'bg-blue-50 border-blue-300 text-blue-700' 
-              : 'bg-white border-gray-300 text-gray-700'
-          }`}
-          title="Toggle Advanced Filters"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
-          </svg>
-          Filters
-          {activeFilters.length > 0 && (
-            <span className="ml-1 bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 rounded-full">
-              {activeFilters.length}
-            </span>
-          )}
-        </button>
-        
-        <button
-          onClick={handleOpenColumnManager}
-          className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          title="Manage Columns"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
-          </svg>
-          Columns
-        </button>
-      </div>
+      {/* Unified Filter Bar */}
+      <UnifiedFilterBar
+        columns={columnDefinitions}
+        data={cables}
+        onFiltersChange={handleFiltersChange}
+        searchTerm={searchTerm}
+        onSearchChange={(value) => {
+          // Legacy support - this will be handled by the search term prop filtering
+        }}
+        selectedFunction={functionFilter}
+        onFunctionChange={(value) => {
+          // Legacy support - this will be handled by the function filter prop filtering
+        }}
+        selectedVoltage={voltageFilter}
+        onVoltageChange={(value) => {
+          // Legacy support - this will be handled by the voltage filter prop filtering  
+        }}
+        selectedFrom={fromFilter}
+        onFromChange={(value) => {
+          // Legacy support - this will be handled by the from filter prop filtering
+        }}
+        selectedTo={toFilter}
+        onToChange={(value) => {
+          // Legacy support - this will be handled by the to filter prop filtering
+        }}
+        selectedRoute={routeFilter}
+        onRouteChange={(value) => {
+          // Legacy support - this will be handled by the route filter prop filtering
+        }}
+        onClearFilters={() => {
+          // Legacy support - this will be handled by the parent component
+        }}
+      />
 
-      {/* Advanced Filters Row */}
-      {showFilters && (
-        <FilterRow
-          columns={columnDefinitions}
-          data={cables}
-          onFiltersChange={handleFiltersChange}
-        />
-      )}
+      {/* Compact Table Toolbar */}
+      <div className="flex items-center justify-between px-4 py-1.5 bg-white border-b border-gray-200">
+        {/* Progress indicator for voltage drop calculations */}
+        {isCalculatingVoltageDrops && voltageDropProgress && (
+          <div className="flex items-center gap-2 text-xs text-gray-600">
+            <TrendingUp className="h-3 w-3 animate-pulse text-blue-600" />
+            <span>{voltageDropProgress.message}</span>
+            <span className="font-medium">
+              ({voltageDropProgress.completed}/{voltageDropProgress.total})
+            </span>
+          </div>
+        )}
+        
+        {!isCalculatingVoltageDrops && (
+          <div className="flex items-center gap-4 text-xs text-gray-600">
+            {(() => {
+              const calculatedCables = cables.filter(c => c.voltageDropPercentage !== undefined && c.voltageDropPercentage !== null);
+              const compliantCables = calculatedCables.filter(c => (c.voltageDropPercentage || 0) <= 3.0);
+              const warningCables = calculatedCables.filter(c => (c.voltageDropPercentage || 0) > 3.0 && (c.voltageDropPercentage || 0) <= 5.0);
+              const errorCables = calculatedCables.filter(c => (c.voltageDropPercentage || 0) > 5.0);
+              
+              if (calculatedCables.length === 0) return null;
+              
+              return (
+                <>
+                  <span className="text-gray-500">Voltage Drop Summary:</span>
+                  <div className="flex items-center gap-1">
+                    <CheckCircle className="h-3 w-3 text-green-600" />
+                    <span className="text-green-600 font-medium">{compliantCables.length}</span>
+                    <span>Compliant</span>
+                  </div>
+                  {warningCables.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3 text-yellow-600" />
+                      <span className="text-yellow-600 font-medium">{warningCables.length}</span>
+                      <span>High</span>
+                    </div>
+                  )}
+                  {errorCables.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      <XCircle className="h-3 w-3 text-red-600" />
+                      <span className="text-red-600 font-medium">{errorCables.length}</span>
+                      <span>Exceeds limit</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCalculateAllVoltageDrops}
+            disabled={isCalculatingVoltageDrops}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Calculate voltage drop for all cables with sufficient data"
+          >
+            <Calculator className="h-3 w-3" />
+            {isCalculatingVoltageDrops ? 'Calculating...' : 'Calculate Voltage Drops'}
+          </button>
+          
+          <button
+            onClick={handleOpenColumnManager}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            title="Manage Columns & Layout"
+          >
+            <ChevronDown className="h-3 w-3" />
+            Manage Columns
+          </button>
+        </div>
+      </div>
 
       {/* AG-Grid Table - fills all available space */}
       <div className="flex-1 ag-theme-quartz">
@@ -756,6 +1126,7 @@ const CableTable: React.FC<CableTableProps> = ({
       {/* Bulk Actions Bar - appears when items are selected */}
       <BulkActionsBar
         selectedCount={selectedCables.length}
+        entityName="cable"
         onBulkEdit={onBulkEdit}
         onBulkDelete={handleBulkDelete}
         onBulkExport={() => {}} // TODO: implement bulk export

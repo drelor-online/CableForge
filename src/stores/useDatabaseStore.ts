@@ -6,7 +6,10 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { TauriDatabaseService } from '../services/tauri-database';
-import { Cable, Project, CableFunction, IOPoint, IOType, SignalType, PLCCard } from '../types';
+import { revisionService } from '../services/revision-service';
+import { calculationService } from '../services/calculation-service';
+import { fillCalculationService } from '../services/fill-calculation-service';
+import { Cable, Project, CableFunction, IOPoint, IOType, SignalType, PLCCard, Load, Conduit, Tray } from '../types';
 
 interface DatabaseStore {
   // Database instance
@@ -24,6 +27,12 @@ interface DatabaseStore {
   ioPoints: IOPoint[];
   selectedIOPoints: number[];
   plcCards: PLCCard[];
+  loads: Load[];
+  selectedLoads: number[];
+  conduits: Conduit[];
+  selectedConduits: number[];
+  trays: Tray[];
+  selectedTrays: number[];
   
   // Actions
   initializeDatabase: () => Promise<void>;
@@ -50,6 +59,30 @@ interface DatabaseStore {
   addPLCCard: (plcCard: Partial<PLCCard>) => Promise<PLCCard>;
   updatePLCCard: (id: number, updates: Partial<PLCCard>) => Promise<PLCCard>;
   deletePLCCard: (id: number) => Promise<void>;
+  
+  // Load operations
+  loadLoads: () => Promise<void>;
+  addLoad: (load: Partial<Load>) => Promise<Load>;
+  updateLoad: (id: number, updates: Partial<Load>) => Promise<Load>;
+  deleteLoad: (id: number) => Promise<void>;
+  setSelectedLoads: (ids: number[]) => void;
+  getNextLoadTag: (prefix?: string) => Promise<string>;
+  
+  // Conduit operations
+  loadConduits: () => Promise<void>;
+  addConduit: (conduit: Partial<Conduit>) => Promise<Conduit>;
+  updateConduit: (id: number, updates: Partial<Conduit>) => Promise<Conduit>;
+  deleteConduit: (id: number) => Promise<void>;
+  setSelectedConduits: (ids: number[]) => void;
+  getNextConduitTag: (prefix?: string) => Promise<string>;
+  
+  // Tray operations
+  loadTrays: () => Promise<void>;
+  addTray: (tray: Partial<Tray>) => Promise<Tray>;
+  updateTray: (id: number, updates: Partial<Tray>) => Promise<Tray>;
+  deleteTray: (id: number) => Promise<void>;
+  setSelectedTrays: (ids: number[]) => void;
+  getNextTrayTag: (prefix?: string) => Promise<string>;
   
   // Project operations
   loadProject: () => Promise<void>;
@@ -79,6 +112,12 @@ export const useDatabaseStore = create<DatabaseStore>()(
       ioPoints: [],
       selectedIOPoints: [],
       plcCards: [],
+      loads: [],
+      selectedLoads: [],
+      conduits: [],
+      selectedConduits: [],
+      trays: [],
+      selectedTrays: [],
 
       // Database lifecycle
       initializeDatabase: async () => {
@@ -105,6 +144,12 @@ export const useDatabaseStore = create<DatabaseStore>()(
           await get().loadIOPoints();
           console.log('useDatabaseStore: Loading PLC cards...');
           await get().loadPLCCards();
+          console.log('useDatabaseStore: Loading loads...');
+          await get().loadLoads();
+          console.log('useDatabaseStore: Loading conduits...');
+          await get().loadConduits();
+          console.log('useDatabaseStore: Loading trays...');
+          await get().loadTrays();
           console.log('useDatabaseStore: Initial data loaded successfully');
         } catch (error) {
           console.error('useDatabaseStore: Database initialization failed:', error);
@@ -127,7 +172,11 @@ export const useDatabaseStore = create<DatabaseStore>()(
             selectedCables: [], 
             ioPoints: [], 
             selectedIOPoints: [], 
-            plcCards: [] 
+            plcCards: [],
+            loads: [],
+            selectedLoads: [],
+            conduits: [],
+            selectedConduits: []
           });
         }
       },
@@ -239,6 +288,45 @@ export const useDatabaseStore = create<DatabaseStore>()(
         
         try {
           const newCable = await db.createCable(cableData);
+          
+          // Track the creation in revision history
+          if (newCable.id) {
+            revisionService.trackChange(
+              'cable',
+              newCable.id,
+              newCable.tag || `Cable ${newCable.id}`,
+              'create'
+            );
+
+            // Recalculate fills for routes that now contain this cable
+            if (newCable.route) {
+              try {
+                const affectedRoutes = fillCalculationService.findAffectedRoutes(undefined, newCable.route);
+                const { conduits, trays } = get();
+                
+                // Recalculate fills for affected conduits
+                for (const conduitTag of affectedRoutes.affectedConduitTags) {
+                  const conduit = conduits.find(c => c.tag === conduitTag);
+                  if (conduit && conduit.id) {
+                    fillCalculationService.recalculateConduitFill(conduit.id)
+                      .catch(error => console.warn(`Failed to recalculate fill for conduit ${conduitTag}:`, error));
+                  }
+                }
+                
+                // Recalculate fills for affected trays
+                for (const trayTag of affectedRoutes.affectedTrayTags) {
+                  const tray = trays.find(t => t.tag === trayTag);
+                  if (tray && tray.id) {
+                    fillCalculationService.recalculateTrayFill(tray.id)
+                      .catch(error => console.warn(`Failed to recalculate fill for tray ${trayTag}:`, error));
+                  }
+                }
+              } catch (error) {
+                console.warn('Failed to recalculate fills after cable creation:', error);
+              }
+            }
+          }
+          
           const updatedCables = [...cables, newCable];
           set({ cables: updatedCables, isLoading: false });
           return newCable;
@@ -258,12 +346,122 @@ export const useDatabaseStore = create<DatabaseStore>()(
         set({ isLoading: true, error: null });
         
         try {
+          // Get the current cable for change tracking
+          const currentCable = cables.find(cable => cable.id === id);
+          
           const updatedCable = await db.updateCable(id, updates);
+          
+          // Check if voltage drop calculation is needed
+          const voltageDropRelevantFields = ['voltage', 'current', 'length', 'size', 'function'];
+          const shouldRecalculateVoltage = voltageDropRelevantFields.some(field => 
+            updates.hasOwnProperty(field)
+          );
+          
+          let finalUpdatedCable = updatedCable;
+          
+          // Calculate voltage drop if relevant fields changed
+          if (shouldRecalculateVoltage && updatedCable.id) {
+            try {
+              // Check if we have enough data for voltage drop calculation
+              const hasRequiredData = updatedCable.voltage && 
+                                    updatedCable.length && 
+                                    updatedCable.size;
+              
+              if (hasRequiredData) {
+                // Use current from cable if available, otherwise estimate based on function
+                let current = updatedCable.current;
+                if (!current && updatedCable.function && updatedCable.size) {
+                  current = calculationService.estimateTypicalCurrent(updatedCable.function, updatedCable.size);
+                }
+                
+                if (current && current > 0) {
+                  const voltageDropResult = await calculationService.calculateVoltageDropForCable(
+                    updatedCable.voltage!,
+                    current,
+                    updatedCable.length!,
+                    updatedCable.size!,
+                    'Copper' // Default to copper, could be made configurable
+                  );
+                  
+                  // Update the cable with calculated voltage drop
+                  finalUpdatedCable = await db.updateCable(id, {
+                    voltageDropPercentage: voltageDropResult.voltage_drop_percentage
+                  });
+                }
+              }
+            } catch (error) {
+              console.warn('Failed to calculate voltage drop for cable:', error);
+              // Don't fail the entire update if voltage drop calculation fails
+            }
+          }
+
+          // Check if fill calculation is needed (when routing or cable properties change)
+          const fillRelevantFields = ['route', 'outerDiameter', 'trayId', 'conduitId'];
+          const shouldRecalculateFill = fillRelevantFields.some(field => 
+            updates.hasOwnProperty(field)
+          );
+
+          if (shouldRecalculateFill && currentCable) {
+            try {
+              // Find affected conduits and trays from route changes
+              const oldRoute = currentCable.route;
+              const newRoute = finalUpdatedCable.route;
+              
+              if (oldRoute !== newRoute) {
+                const affectedRoutes = fillCalculationService.findAffectedRoutes(oldRoute, newRoute);
+                
+                // Get conduits and trays to find IDs from tags
+                const { conduits, trays } = get();
+                
+                // Recalculate fills for affected conduits
+                for (const conduitTag of affectedRoutes.affectedConduitTags) {
+                  const conduit = conduits.find(c => c.tag === conduitTag);
+                  if (conduit && conduit.id) {
+                    fillCalculationService.recalculateConduitFill(conduit.id)
+                      .catch(error => console.warn(`Failed to recalculate fill for conduit ${conduitTag}:`, error));
+                  }
+                }
+                
+                // Recalculate fills for affected trays
+                for (const trayTag of affectedRoutes.affectedTrayTags) {
+                  const tray = trays.find(t => t.tag === trayTag);
+                  if (tray && tray.id) {
+                    fillCalculationService.recalculateTrayFill(tray.id)
+                      .catch(error => console.warn(`Failed to recalculate fill for tray ${trayTag}:`, error));
+                  }
+                }
+              }
+            } catch (error) {
+              console.warn('Failed to recalculate fills after cable update:', error);
+              // Don't fail the entire update if fill calculation fails
+            }
+          }
+          
+          // Track field-level changes in revision history
+          if (currentCable) {
+            Object.keys(updates).forEach(field => {
+              const oldValue = (currentCable as any)[field];
+              const newValue = (updates as any)[field];
+              
+              if (oldValue !== newValue) {
+                revisionService.trackChange(
+                  'cable',
+                  id,
+                  currentCable.tag || `Cable ${id}`,
+                  'update',
+                  field,
+                  oldValue,
+                  newValue
+                );
+              }
+            });
+          }
+          
           const updatedCables = cables.map(cable => 
-            cable.id === id ? updatedCable : cable
+            cable.id === id ? finalUpdatedCable : cable
           );
           set({ cables: updatedCables, isLoading: false });
-          return updatedCable;
+          return finalUpdatedCable;
         } catch (error) {
           set({ 
             error: error instanceof Error ? error.message : 'Failed to update cable',
@@ -280,7 +478,49 @@ export const useDatabaseStore = create<DatabaseStore>()(
         set({ isLoading: true, error: null });
         
         try {
+          // Get the cable for change tracking before deletion
+          const cableToDelete = cables.find(cable => cable.id === id);
+          
           await db.deleteCable(id);
+          
+          // Track the deletion in revision history
+          if (cableToDelete) {
+            revisionService.trackChange(
+              'cable',
+              id,
+              cableToDelete.tag || `Cable ${id}`,
+              'delete'
+            );
+
+            // Recalculate fills for routes that contained this cable
+            if (cableToDelete.route) {
+              try {
+                const affectedRoutes = fillCalculationService.findAffectedRoutes(cableToDelete.route);
+                const { conduits, trays } = get();
+                
+                // Recalculate fills for affected conduits
+                for (const conduitTag of affectedRoutes.affectedConduitTags) {
+                  const conduit = conduits.find(c => c.tag === conduitTag);
+                  if (conduit && conduit.id) {
+                    fillCalculationService.recalculateConduitFill(conduit.id)
+                      .catch(error => console.warn(`Failed to recalculate fill for conduit ${conduitTag}:`, error));
+                  }
+                }
+                
+                // Recalculate fills for affected trays
+                for (const trayTag of affectedRoutes.affectedTrayTags) {
+                  const tray = trays.find(t => t.tag === trayTag);
+                  if (tray && tray.id) {
+                    fillCalculationService.recalculateTrayFill(tray.id)
+                      .catch(error => console.warn(`Failed to recalculate fill for tray ${trayTag}:`, error));
+                  }
+                }
+              } catch (error) {
+                console.warn('Failed to recalculate fills after cable deletion:', error);
+              }
+            }
+          }
+          
           const updatedCables = cables.filter(cable => cable.id !== id);
           const updatedSelection = selectedCables.filter(selectedId => selectedId !== id);
           set({ 
@@ -835,6 +1075,383 @@ export const useDatabaseStore = create<DatabaseStore>()(
             isLoading: false 
           });
           throw error;
+        }
+      },
+
+      // Load operations
+      loadLoads: async () => {
+        const { db } = get();
+        if (!db) {
+          console.log('useDatabaseStore: loadLoads called but db is null');
+          return;
+        }
+        console.log('useDatabaseStore: Loading loads...');
+        set({ isLoading: true, error: null });
+        
+        try {
+          const loads = await db.getLoads();
+          console.log('useDatabaseStore: getLoads returned:', loads);
+          
+          set({ loads, isLoading: false });
+        } catch (error) {
+          console.error('Failed to load loads:', error);
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to load loads',
+            isLoading: false 
+          });
+        }
+      },
+
+      addLoad: async (loadData: Partial<Load>) => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        set({ isLoading: true, error: null });
+        
+        try {
+          const newLoad = await db.createLoad(loadData);
+          
+          // Update local state
+          set(state => ({ 
+            loads: [...state.loads, newLoad],
+            isLoading: false 
+          }));
+          
+          return newLoad;
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to add load',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      updateLoad: async (id: number, updates: Partial<Load>) => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        set({ isLoading: true, error: null });
+        
+        try {
+          const updatedLoad = await db.updateLoad(id, updates);
+          
+          // Update local state
+          set(state => ({
+            loads: state.loads.map(load => 
+              load.id === id ? updatedLoad : load
+            ),
+            isLoading: false
+          }));
+          
+          return updatedLoad;
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to update load',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      deleteLoad: async (id: number) => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        set({ isLoading: true, error: null });
+        
+        try {
+          await db.deleteLoad(id);
+          
+          // Update local state
+          set(state => ({
+            loads: state.loads.filter(load => load.id !== id),
+            selectedLoads: state.selectedLoads.filter(selectedId => selectedId !== id),
+            isLoading: false
+          }));
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to delete load',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      setSelectedLoads: (ids: number[]) => {
+        set({ selectedLoads: ids });
+      },
+
+      getNextLoadTag: async (prefix: string = 'L') => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        
+        try {
+          // For now, implement simple auto-increment logic
+          const { loads } = get();
+          const existingNumbers = loads
+            .map(load => load.tag)
+            .filter(tag => tag.startsWith(`${prefix}-`))
+            .map(tag => {
+              const match = tag.match(new RegExp(`^${prefix}-(\\d+)$`));
+              return match ? parseInt(match[1], 10) : 0;
+            })
+            .filter(num => !isNaN(num));
+          
+          const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+          return `${prefix}-${nextNumber.toString().padStart(3, '0')}`;
+        } catch (error) {
+          console.error('Failed to get next load tag:', error);
+          return `${prefix}-001`;
+        }
+      },
+
+      // Conduit operations
+      loadConduits: async () => {
+        const { db } = get();
+        if (!db) {
+          console.log('useDatabaseStore: loadConduits called but db is null');
+          return;
+        }
+
+        set({ isLoading: true, error: null });
+        
+        try {
+          const conduits = await db.getConduits();
+          set({ 
+            conduits, 
+            isLoading: false 
+          });
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to load conduits',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      addConduit: async (conduitData: Partial<Conduit>) => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        set({ isLoading: true, error: null });
+        
+        try {
+          const newConduit = await db.createConduit(conduitData);
+          
+          // Update local state
+          set(state => ({
+            conduits: [...state.conduits, newConduit],
+            isLoading: false
+          }));
+          
+          return newConduit;
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to add conduit',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      updateConduit: async (id: number, updates: Partial<Conduit>) => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        set({ isLoading: true, error: null });
+        
+        try {
+          const updatedConduit = await db.updateConduit(id, updates);
+          
+          // Update local state
+          set(state => ({
+            conduits: state.conduits.map(conduit => 
+              conduit.id === id ? updatedConduit : conduit
+            ),
+            isLoading: false
+          }));
+          
+          return updatedConduit;
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to update conduit',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      deleteConduit: async (id: number) => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        set({ isLoading: true, error: null });
+        
+        try {
+          await db.deleteConduit(id);
+          
+          // Update local state
+          set(state => ({
+            conduits: state.conduits.filter(conduit => conduit.id !== id),
+            selectedConduits: state.selectedConduits.filter(selectedId => selectedId !== id),
+            isLoading: false
+          }));
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to delete conduit',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      setSelectedConduits: (ids: number[]) => {
+        set({ selectedConduits: ids });
+      },
+
+      getNextConduitTag: async (prefix: string = 'CDT') => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        
+        try {
+          // For now, implement simple auto-increment logic
+          const { conduits } = get();
+          const existingNumbers = conduits
+            .map(conduit => conduit.tag)
+            .filter(tag => tag.startsWith(`${prefix}-`))
+            .map(tag => {
+              const match = tag.match(new RegExp(`^${prefix}-(\\d+)$`));
+              return match ? parseInt(match[1], 10) : 0;
+            })
+            .filter(num => !isNaN(num));
+          
+          const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+          return `${prefix}-${nextNumber.toString().padStart(3, '0')}`;
+        } catch (error) {
+          console.error('Failed to get next conduit tag:', error);
+          return `${prefix}-001`;
+        }
+      },
+
+      // Tray operations
+      loadTrays: async () => {
+        const { db } = get();
+        if (!db) {
+          console.log('useDatabaseStore: loadTrays called but db is null');
+          return;
+        }
+
+        set({ isLoading: true, error: null });
+        
+        try {
+          const trays = await db.getTrays();
+          set({ 
+            trays, 
+            isLoading: false 
+          });
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to load trays',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      addTray: async (trayData: Partial<Tray>) => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        set({ isLoading: true, error: null });
+        
+        try {
+          const newTray = await db.createTray(trayData);
+          
+          // Update local state
+          set(state => ({
+            trays: [...state.trays, newTray],
+            isLoading: false
+          }));
+          
+          return newTray;
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to add tray',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      updateTray: async (id: number, updates: Partial<Tray>) => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        set({ isLoading: true, error: null });
+        
+        try {
+          const updatedTray = await db.updateTray(id, updates);
+          
+          // Update local state
+          set(state => ({
+            trays: state.trays.map(tray => 
+              tray.id === id ? updatedTray : tray
+            ),
+            isLoading: false
+          }));
+          
+          return updatedTray;
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to update tray',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      deleteTray: async (id: number) => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        set({ isLoading: true, error: null });
+        
+        try {
+          await db.deleteTray(id);
+          
+          // Update local state
+          set(state => ({
+            trays: state.trays.filter(tray => tray.id !== id),
+            selectedTrays: state.selectedTrays.filter(selectedId => selectedId !== id),
+            isLoading: false
+          }));
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to delete tray',
+            isLoading: false 
+          });
+          throw error;
+        }
+      },
+
+      setSelectedTrays: (ids: number[]) => {
+        set({ selectedTrays: ids });
+      },
+
+      getNextTrayTag: async (prefix: string = 'TRAY') => {
+        const { db } = get();
+        if (!db) throw new Error('Database not initialized');
+        
+        try {
+          // For now, implement simple auto-increment logic
+          const { trays } = get();
+          const existingNumbers = trays
+            .map(tray => tray.tag)
+            .filter(tag => tag.startsWith(`${prefix}-`))
+            .map(tag => {
+              const match = tag.match(new RegExp(`^${prefix}-(\\d+)$`));
+              return match ? parseInt(match[1], 10) : 0;
+            })
+            .filter(num => !isNaN(num));
+          
+          const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+          return `${prefix}-${nextNumber.toString().padStart(3, '0')}`;
+        } catch (error) {
+          console.error('Failed to get next tray tag:', error);
+          return `${prefix}-001`;
         }
       },
 

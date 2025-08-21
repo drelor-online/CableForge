@@ -2,12 +2,14 @@ import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react'
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, GridReadyEvent, CellValueChangedEvent, SelectionChangedEvent } from 'ag-grid-community';
 import { IOPoint, SignalType, IOType, PLCCard } from '../../types';
+import { revisionService } from '../../services/revision-service';
 import KebabMenu from '../ui/KebabMenu';
 import BulkActionsBar from './BulkActionsBar';
 // Toolbar removed - functionality moved to CompactHeader
 import PLCCardPanel from '../ui/PLCCardPanel';
 import { PLCAssignmentService } from '../../services/plc-assignment-service';
 import { useUI } from '../../contexts/UIContext';
+import { Filter, SortAsc, SortDesc, ChevronDown, Plus, Search, X, Edit2, Copy, Zap, Trash2 } from 'lucide-react';
 
 interface IOTableProps {
   ioPoints: IOPoint[];
@@ -49,6 +51,7 @@ const IOTable: React.FC<IOTableProps> = ({
   // Refs for keyboard navigation
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [gridApi, setGridApi] = useState<any>(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
   
   // PLC card panel state
   const [showPLCPanel, setShowPLCPanel] = useState(true);
@@ -358,11 +361,7 @@ const IOTable: React.FC<IOTableProps> = ({
           {
             label: 'Edit I/O point',
             onClick: () => handleEdit(ioPoint),
-            icon: (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            )
+            icon: <Edit2 className="h-4 w-4" />
           },
           {
             label: 'Duplicate I/O point',
@@ -374,31 +373,19 @@ const IOTable: React.FC<IOTableProps> = ({
                 onIOPointEdit(duplicatedIOPoint);
               }
             },
-            icon: (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            )
+            icon: <Copy className="h-4 w-4" />
           },
           {
             label: 'Auto-assign channel',
             onClick: () => handleAutoAssignChannel(ioPoint),
             disabled: !ioPoint.ioType,
-            icon: (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            )
+            icon: <Zap className="h-4 w-4" />
           },
           {
             label: 'Delete I/O point',
             onClick: () => handleDelete(ioPoint),
             variant: 'danger' as const,
-            icon: (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            )
+            icon: <Trash2 className="h-4 w-4" />
           }
         ];
         
@@ -424,12 +411,25 @@ const IOTable: React.FC<IOTableProps> = ({
   }, []);
 
   const onCellValueChanged = useCallback(async (event: CellValueChangedEvent) => {
-    const ioPointId = event.data.id;
+    const ioPoint = event.data as IOPoint;
     const field = event.column.getColId();
     const newValue = event.newValue;
-    if (ioPointId && field) {
+    const oldValue = event.oldValue;
+    
+    if (ioPoint.id && field) {
+      // Track the change in revision history
+      revisionService.trackChange(
+        'io_point',
+        ioPoint.id,
+        ioPoint.tag || `IO Point ${ioPoint.id}`,
+        'update',
+        field,
+        oldValue,
+        newValue
+      );
+      
       const updates: Partial<IOPoint> = { [field]: newValue };
-      onIOPointUpdate(ioPointId, updates);
+      onIOPointUpdate(ioPoint.id, updates);
     }
   }, [onIOPointUpdate]);
 
@@ -438,6 +438,78 @@ const IOTable: React.FC<IOTableProps> = ({
     const selectedIds = selectedRows.map((row: IOPoint) => row.id!);
     onSelectionChange(selectedIds);
   }, [onSelectionChange]);
+
+  // Generate next I/O point tag
+  const generateNextIOTag = useCallback(() => {
+    const existingTags = ioPoints
+      .map(io => io.tag)
+      .filter(tag => tag?.match(/^IO-\d+$/))
+      .map(tag => parseInt(tag!.replace('IO-', '')))
+      .filter(num => !isNaN(num));
+    
+    const nextNumber = existingTags.length > 0 ? Math.max(...existingTags) + 1 : 1;
+    return `IO-${nextNumber.toString().padStart(3, '0')}`;
+  }, [ioPoints]);
+
+  // Handle inline add I/O point
+  const handleInlineAddIOPoint = useCallback(() => {
+    if (isAddingNew) return;
+    
+    setIsAddingNew(true);
+    const newIOPoint: IOPoint = {
+      tag: generateNextIOTag(),
+      description: '',
+      ioType: IOType.DI,
+      signalType: SignalType.TwentyFourVDC,
+      plcName: '',
+      rack: undefined,
+      slot: undefined,
+      channel: undefined,
+      terminalBlock: '',
+      cableId: undefined,
+      notes: '',
+      revisionId: 1,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Add to filtered I/O points for immediate display
+    setFilteredIOPoints(prev => [newIOPoint, ...prev]);
+
+    // Focus on the tag cell after a short delay
+    setTimeout(() => {
+      if (gridApi) {
+        gridApi.setFocusedCell(0, 'tag');
+        gridApi.startEditingCell({ rowIndex: 0, colKey: 'tag' });
+      }
+    }, 100);
+  }, [isAddingNew, generateNextIOTag, gridApi]);
+
+  // Handle row value change for new I/O point
+  const handleRowValueChanged = useCallback((event: CellValueChangedEvent) => {
+    const { data, column, newValue, oldValue } = event;
+    const field = column.getColId();
+    
+    if (newValue !== oldValue) {
+      // If this is a new I/O point (no id), create it
+      if (!data.id && isAddingNew) {
+        const ioData: IOPoint = {
+          ...data,
+          [field]: newValue
+        };
+        
+        // Save to database
+        onIOPointUpdate(-1, ioData);
+        setIsAddingNew(false);
+      } else if (data.id) {
+        // Existing I/O point, update normally
+        const updates: Partial<IOPoint> = {
+          [field]: newValue
+        };
+        onIOPointUpdate(data.id, updates);
+      }
+    }
+  }, [isAddingNew, onIOPointUpdate]);
 
   // Bulk action handlers
   const handleBulkDelete = useCallback(async () => {
@@ -734,6 +806,17 @@ const IOTable: React.FC<IOTableProps> = ({
                 Clear all
               </button>
             )}
+            
+            {/* Add I/O Point button */}
+            <div className="ml-auto">
+              <button
+                onClick={handleInlineAddIOPoint}
+                disabled={isAddingNew}
+                className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isAddingNew ? 'Adding...' : 'Add I/O Point'}
+              </button>
+            </div>
           </div>
           
           {/* Filter summary */}
@@ -755,14 +838,14 @@ const IOTable: React.FC<IOTableProps> = ({
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
           onGridReady={onGridReady}
-          onCellValueChanged={onCellValueChanged}
+          onCellValueChanged={handleRowValueChanged}
           onSelectionChanged={onSelectionChanged}
           rowSelection="multiple"
           suppressRowClickSelection={true}
           animateRows={true}
           enableCellTextSelection={true}
           ensureDomOrder={true}
-          getRowId={(params) => params.data.id?.toString() || params.data.tag}
+          getRowId={(params) => params.data.id?.toString() || params.data.tag || Math.random().toString()}
           noRowsOverlayComponent={() => (
             <div className="flex items-center justify-center h-32 text-gray-500">
               <div className="text-center">
@@ -785,9 +868,7 @@ const IOTable: React.FC<IOTableProps> = ({
                 className="p-1 text-gray-400 hover:text-gray-600 rounded"
                 title="Hide PLC panel"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-4 w-4" />
               </button>
             </div>
             <div className="flex-1 p-3 overflow-hidden">
@@ -836,6 +917,7 @@ const IOTable: React.FC<IOTableProps> = ({
       {/* Bulk Actions Bar */}
       <BulkActionsBar
         selectedCount={selectedIOPoints.length}
+        entityName="I/O point"
         onBulkEdit={onBulkEdit}
         onBulkDelete={handleBulkDelete}
         onBulkExport={handleBulkExport}

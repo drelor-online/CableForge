@@ -20,30 +20,32 @@ export const defaultColumns: ColumnDefinition[] = [
   { field: 'function', headerName: 'Function', visible: true, width: 120, category: 'electrical', order: 2 },
   { field: 'voltage', headerName: 'Voltage', visible: true, width: 100, category: 'electrical', order: 3 },
   { field: 'current', headerName: 'Current', visible: false, width: 100, category: 'electrical', order: 4 },
-  { field: 'segregationClass', headerName: 'Segregation', visible: false, width: 120, category: 'electrical', order: 5 },
+  { field: 'voltageDropPercentage', headerName: 'Voltage Drop %', visible: true, width: 130, category: 'electrical', order: 5 },
+  { field: 'segregationClass', headerName: 'Segregation', visible: false, width: 120, category: 'electrical', order: 6 },
   
   // Physical
-  { field: 'cableType', headerName: 'Cable Type', visible: true, width: 120, category: 'physical', order: 6 },
-  { field: 'size', headerName: 'Size', visible: true, width: 100, category: 'physical', order: 7 },
-  { field: 'cores', headerName: 'Cores', visible: true, width: 80, category: 'physical', order: 8 },
-  { field: 'manufacturer', headerName: 'Manufacturer', visible: false, width: 140, category: 'physical', order: 9 },
-  { field: 'partNumber', headerName: 'Part Number', visible: false, width: 140, category: 'physical', order: 10 },
-  { field: 'outerDiameter', headerName: 'OD (mm)', visible: false, width: 100, category: 'physical', order: 11 },
+  { field: 'cableType', headerName: 'Cable Type', visible: true, width: 120, category: 'physical', order: 7 },
+  { field: 'size', headerName: 'Size', visible: true, width: 100, category: 'physical', order: 8 },
+  { field: 'cores', headerName: 'Cores', visible: true, width: 80, category: 'physical', order: 9 },
+  { field: 'manufacturer', headerName: 'Manufacturer', visible: false, width: 140, category: 'physical', order: 10 },
+  { field: 'partNumber', headerName: 'Part Number', visible: false, width: 140, category: 'physical', order: 11 },
+  { field: 'outerDiameter', headerName: 'OD (mm)', visible: false, width: 100, category: 'physical', order: 12 },
   
   // Routing
-  { field: 'fromLocation', headerName: 'From Location', visible: false, width: 140, category: 'routing', order: 12 },
-  { field: 'fromEquipment', headerName: 'From Equipment', visible: true, width: 140, category: 'routing', order: 13 },
-  { field: 'toLocation', headerName: 'To Location', visible: false, width: 140, category: 'routing', order: 14 },
-  { field: 'toEquipment', headerName: 'To Equipment', visible: true, width: 140, category: 'routing', order: 15 },
-  { field: 'route', headerName: 'Route', visible: true, width: 100, category: 'routing', order: 16 },
-  { field: 'length', headerName: 'Length', visible: true, width: 100, category: 'routing', order: 17 },
-  { field: 'sparePercentage', headerName: 'Spare %', visible: false, width: 100, category: 'routing', order: 18 },
-  { field: 'calculatedLength', headerName: 'Calc. Length', visible: false, width: 120, category: 'routing', order: 19 },
+  { field: 'fromLocation', headerName: 'From Location', visible: false, width: 140, category: 'routing', order: 13 },
+  { field: 'fromEquipment', headerName: 'From Equipment', visible: true, width: 140, category: 'routing', order: 14 },
+  { field: 'toLocation', headerName: 'To Location', visible: false, width: 140, category: 'routing', order: 15 },
+  { field: 'toEquipment', headerName: 'To Equipment', visible: true, width: 140, category: 'routing', order: 16 },
+  { field: 'route', headerName: 'Route', visible: true, width: 100, category: 'routing', order: 17 },
+  { field: 'trayId', headerName: 'Tray', visible: true, width: 100, category: 'routing', order: 18 },
+  { field: 'conduitId', headerName: 'Conduit', visible: true, width: 100, category: 'routing', order: 19 },
+  { field: 'length', headerName: 'Length', visible: true, width: 100, category: 'routing', order: 20 },
+  { field: 'sparePercentage', headerName: 'Spare %', visible: false, width: 100, category: 'routing', order: 21 },
+  { field: 'calculatedLength', headerName: 'Calc. Length', visible: false, width: 120, category: 'routing', order: 22 },
   
   // Metadata
-  { field: 'notes', headerName: 'Notes', visible: false, width: 200, category: 'metadata', order: 20 },
-  { field: 'voltageDropPercentage', headerName: 'Voltage Drop %', visible: false, width: 130, category: 'metadata', order: 21 },
-  { field: 'segregationWarning', headerName: 'Segregation Warning', visible: false, width: 160, category: 'metadata', order: 22 },
+  { field: 'notes', headerName: 'Notes', visible: false, width: 200, category: 'metadata', order: 23 },
+  { field: 'segregationWarning', headerName: 'Segregation Warning', visible: false, width: 160, category: 'metadata', order: 24 },
 ];
 
 class ColumnService {

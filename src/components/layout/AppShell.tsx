@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { AppState } from '../../types';
 import CompactHeader from './CompactHeader';
-import FilterBar from './FilterBar';
 import GridFooter from './GridFooter';
 
 interface AppShellProps {
   appState: AppState;
   onTabChange: (tab: AppState['activeTab']) => void;
   onExport: () => void;
+  onMultiSheetExport?: () => void;
   onImport?: () => void;
   children: React.ReactNode;
   // Add optional data for GridFooter
@@ -21,6 +21,7 @@ interface AppShellProps {
     ioPoints: number;
     conduits: number;
     loads: number;
+    trays: number;
   };
   validationCounts?: {
     errorCount: number;
@@ -40,12 +41,22 @@ interface AppShellProps {
   onOpenAutoNumbering?: () => void;
   // Find & replace
   onOpenFindReplace?: () => void;
+  // Revision control
+  onShowRevisionHistory?: () => void;
+  onCreateCheckpoint?: () => void;
+  // Project menu handlers
+  onNewProject?: () => void;
+  onSaveProject?: () => void;
+  onSaveProjectAs?: () => void;
+  onOpenProject?: () => void;
+  onSaveAsTemplate?: () => void;
 }
 
 const AppShell: React.FC<AppShellProps> = ({
   appState,
   onTabChange,
   onExport,
+  onMultiSheetExport,
   onImport,
   children,
   currentViewStats,
@@ -53,46 +64,16 @@ const AppShell: React.FC<AppShellProps> = ({
   validationCounts,
   onFiltersChange,
   onOpenAutoNumbering,
-  onOpenFindReplace
+  onOpenFindReplace,
+  onShowRevisionHistory,
+  onCreateCheckpoint,
+  onNewProject,
+  onSaveProject,
+  onSaveProjectAs,
+  onOpenProject,
+  onSaveAsTemplate
 }) => {
 
-  // Filter state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedFunction, setSelectedFunction] = useState('Any');
-  const [selectedVoltage, setSelectedVoltage] = useState('Any');
-  const [selectedFrom, setSelectedFrom] = useState('Any');
-  const [selectedTo, setSelectedTo] = useState('Any');
-  const [selectedRoute, setSelectedRoute] = useState('Any');
-
-  // Handle filter changes
-  const handleFiltersChange = () => {
-    if (onFiltersChange) {
-      onFiltersChange({
-        searchTerm,
-        selectedFunction,
-        selectedVoltage,
-        selectedFrom,
-        selectedTo,
-        selectedRoute
-      });
-    }
-  };
-
-  // Clear all filters
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setSelectedFunction('Any');
-    setSelectedVoltage('Any');
-    setSelectedFrom('Any');
-    setSelectedTo('Any');
-    setSelectedRoute('Any');
-    handleFiltersChange();
-  };
-
-  // Call handleFiltersChange whenever filter values change
-  React.useEffect(() => {
-    handleFiltersChange();
-  }, [searchTerm, selectedFunction, selectedVoltage, selectedFrom, selectedTo, selectedRoute]);
 
   return (
     <div className="flex flex-col h-screen bg-white">
@@ -102,29 +83,19 @@ const AppShell: React.FC<AppShellProps> = ({
         onTabChange={onTabChange}
         validationCounts={validationCounts}
         onExport={onExport}
+        onMultiSheetExport={onMultiSheetExport}
         onImport={onImport}
         onOpenAutoNumbering={onOpenAutoNumbering}
         onOpenFindReplace={onOpenFindReplace}
+        onShowRevisionHistory={onShowRevisionHistory}
+        onCreateCheckpoint={onCreateCheckpoint}
+        onNewProject={onNewProject}
+        onSaveProject={onSaveProject}
+        onSaveProjectAs={onSaveProjectAs}
+        onOpenProject={onOpenProject}
+        onSaveAsTemplate={onSaveAsTemplate}
+        isLoading={appState.isLoading}
       />
-      
-      {/* Filter Bar - only show on cable tab for now */}
-      {appState.activeTab === 'cables' && (
-        <FilterBar
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          selectedFunction={selectedFunction}
-          onFunctionChange={setSelectedFunction}
-          selectedVoltage={selectedVoltage}
-          onVoltageChange={setSelectedVoltage}
-          selectedFrom={selectedFrom}
-          onFromChange={setSelectedFrom}
-          selectedTo={selectedTo}
-          onToChange={setSelectedTo}
-          selectedRoute={selectedRoute}
-          onRouteChange={setSelectedRoute}
-          onClearFilters={handleClearFilters}
-        />
-      )}
       
       {/* Main Content Area - fills remaining space */}
       <main className="flex-1 overflow-hidden">

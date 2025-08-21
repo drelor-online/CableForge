@@ -2,6 +2,15 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Cable } from '../../types';
 import { ColumnDefinition } from '../../services/column-service';
 import { ImportOptions, ImportValidationResult, ParsedCsvData, importService } from '../../services/import-service';
+import { 
+  X,
+  Upload,
+  FileText,
+  CheckCircle,
+  AlertTriangle,
+  Info,
+  Check
+} from 'lucide-react';
 
 interface ImportWizardModalProps {
   isOpen: boolean;
@@ -144,9 +153,7 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
           <div className="space-y-6">
             <div className="text-center">
               <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
+                <Upload className="w-8 h-8 text-blue-600" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Upload Cable Data</h3>
               <p className="text-gray-600 mb-6">Select a CSV or Excel file containing your cable data</p>
@@ -169,9 +176,7 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
               >
                 <div className="space-y-2">
                   <div className="text-gray-400">
-                    <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                    <FileText className="w-12 h-12 mx-auto" />
                   </div>
                   <div className="text-lg text-gray-600">
                     Drop your file here or <span className="text-blue-600 underline">browse</span>
@@ -186,9 +191,7 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
             {selectedFile && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center">
-                  <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
                   <span className="text-green-800 font-medium">{selectedFile.name}</span>
                   <span className="text-green-600 ml-2">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
                 </div>
@@ -292,9 +295,7 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
               <div className="flex items-center">
-                <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 15.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mr-2" />
                 <span className="text-yellow-800 text-sm">
                   Fields marked with * are required and must be mapped
                 </span>
@@ -432,9 +433,7 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
           <div className="space-y-6">
             <div className="text-center">
               <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Import</h3>
               <p className="text-gray-600 mb-6">
@@ -468,9 +467,7 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-start">
-                <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <Info className="w-5 h-5 text-blue-600 mr-2 mt-0.5" />
                 <div className="text-sm text-blue-800">
                   <div className="font-medium mb-1">Before you proceed:</div>
                   <ul className="list-disc list-inside space-y-1">
@@ -613,9 +610,7 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
               onClick={handleClose}
               className="text-gray-400 hover:text-gray-600"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-6 h-6" />
             </button>
           </div>
 
@@ -633,9 +628,7 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
                   }
                 `}>
                   {step.completed ? (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Check className="w-5 h-5" />
                   ) : (
                     index + 1
                   )}

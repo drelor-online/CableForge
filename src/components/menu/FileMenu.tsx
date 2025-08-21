@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { FolderPlus, FolderOpen, Save, FileDown, ClipboardList, Upload, Download } from 'lucide-react';
 
 interface FileMenuProps {
   onNewProject: () => void;
   onSaveProject: () => void;
   onSaveProjectAs: () => void;
   onOpenProject: () => void;
+  onSaveAsTemplate?: () => void;
   onImportProject?: () => void;
   onExportProject?: () => void;
   isLoading: boolean;
@@ -15,6 +17,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
   onSaveProject,
   onSaveProjectAs,
   onOpenProject,
+  onSaveAsTemplate,
   onImportProject,
   onExportProject,
   isLoading
@@ -62,7 +65,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
               className={menuItemClass}
               onClick={() => handleMenuClick(onNewProject)}
             >
-              <span>📁</span>
+              <FolderPlus className="h-4 w-4" />
               <span>New Project</span>
               <span className="ml-auto text-xs text-gray-400">Ctrl+N</span>
             </div>
@@ -71,7 +74,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
               className={menuItemClass}
               onClick={() => handleMenuClick(onOpenProject)}
             >
-              <span>📂</span>
+              <FolderOpen className="h-4 w-4" />
               <span>Open Project</span>
               <span className="ml-auto text-xs text-gray-400">Ctrl+O</span>
             </div>
@@ -82,7 +85,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
               className={menuItemClass}
               onClick={() => handleMenuClick(onSaveProject)}
             >
-              <span>💾</span>
+              <Save className="h-4 w-4" />
               <span>Save</span>
               <span className="ml-auto text-xs text-gray-400">Ctrl+S</span>
             </div>
@@ -91,10 +94,20 @@ export const FileMenu: React.FC<FileMenuProps> = ({
               className={menuItemClass}
               onClick={() => handleMenuClick(onSaveProjectAs)}
             >
-              <span>💾</span>
+              <FileDown className="h-4 w-4" />
               <span>Save As...</span>
               <span className="ml-auto text-xs text-gray-400">Ctrl+Shift+S</span>
             </div>
+            
+            {onSaveAsTemplate && (
+              <div 
+                className={menuItemClass}
+                onClick={() => handleMenuClick(onSaveAsTemplate)}
+              >
+                <ClipboardList className="h-4 w-4" />
+                <span>Save as Template</span>
+              </div>
+            )}
             
             <div className="border-t border-gray-100 my-1"></div>
             
@@ -103,7 +116,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
                 className={menuItemClass}
                 onClick={() => handleMenuClick(onImportProject)}
               >
-                <span>📥</span>
+                <Upload className="h-4 w-4" />
                 <span>Import</span>
               </div>
             )}
@@ -113,7 +126,7 @@ export const FileMenu: React.FC<FileMenuProps> = ({
                 className={menuItemClass}
                 onClick={() => handleMenuClick(onExportProject)}
               >
-                <span>📤</span>
+                <Download className="h-4 w-4" />
                 <span>Export</span>
               </div>
             )}

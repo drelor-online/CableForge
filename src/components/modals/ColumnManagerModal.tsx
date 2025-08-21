@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { ColumnDefinition, defaultColumns, columnService } from '../../services/column-service';
+import { 
+  Search,
+  Settings,
+  Pin,
+  FileText,
+  Zap,
+  Cable,
+  MapPin,
+  BarChart3
+} from 'lucide-react';
 
 interface ColumnManagerModalProps {
   isOpen: boolean;
@@ -17,11 +27,11 @@ const categoryLabels = {
 };
 
 const categoryIcons = {
-  core: '📋',
-  electrical: '⚡',
-  physical: '🔌',
-  routing: '🗺️',
-  metadata: '📊'
+  core: <FileText className="w-4 h-4" />,
+  electrical: <Zap className="w-4 h-4" />,
+  physical: <Cable className="w-4 h-4" />,
+  routing: <MapPin className="w-4 h-4" />,
+  metadata: <BarChart3 className="w-4 h-4" />
 };
 
 const ColumnManagerModal: React.FC<ColumnManagerModalProps> = ({
@@ -149,13 +159,16 @@ const ColumnManagerModal: React.FC<ColumnManagerModalProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Search columns:
               </label>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Search by column name..."
-              />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Search by column name..."
+                />
+              </div>
             </div>
             
             <div>
@@ -309,7 +322,7 @@ const ColumnManagerModal: React.FC<ColumnManagerModalProps> = ({
                           }`}
                           title={column.pinned ? 'Unpin column' : 'Pin column to left'}
                         >
-                          📌
+                          <Pin className="w-3 h-3" />
                         </button>
                       )}
                     </div>

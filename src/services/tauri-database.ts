@@ -4,7 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { Cable, Project, IOPoint, PLCCard, IOType, SignalType } from '../types';
+import { Cable, Project, IOPoint, PLCCard, IOType, SignalType, Load, Conduit, ConduitType, Tray, TrayType, TrayMaterial } from '../types';
 
 export interface TauriCable {
   id?: number;
@@ -44,6 +44,71 @@ export interface TauriProject {
   engineer?: string;
   major_revision: string;
   minor_revision: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TauriLoad {
+  id?: number;
+  project_id: number;
+  revision_id: number;
+  tag: string;
+  description?: string;
+  load_type?: string;
+  power_kw?: number;
+  power_hp?: number;
+  voltage?: number;
+  current?: number;
+  power_factor?: number;
+  efficiency?: number;
+  demand_factor?: number;
+  connected_load_kw?: number;
+  demand_load_kw?: number;
+  cable_id?: number;
+  feeder_cable?: string;
+  starter_type?: string;
+  protection_type?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TauriConduit {
+  id?: number;
+  project_id: number;
+  revision_id: number;
+  tag: string;
+  type?: string;
+  size?: string;
+  internal_diameter?: number;
+  fill_percentage: number;
+  max_fill_percentage: number;
+  from_location?: string;
+  to_location?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TauriTray {
+  id?: number;
+  project_id: number;
+  revision_id: number;
+  tag: string;
+  type?: string;
+  width?: number;
+  height?: number;
+  length?: number;
+  fill_percentage: number;
+  max_fill_percentage: number;
+  material?: string;
+  finish?: string;
+  from_location?: string;
+  to_location?: string;
+  elevation?: number;
+  support_spacing?: number;
+  load_rating?: number;
+  notes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -476,8 +541,20 @@ export class TauriDatabaseService {
         cableId: data.cableId,
         notes: data.notes,
       };
-      const tauriData = this.mapIOPointToTauriIOPointData(completeData);
-      const result: TauriIOPoint = await invoke('create_io_point', { data: tauriData });
+      const tauriData = {
+        tag: completeData.tag,
+        description: completeData.description || null,
+        signal_type: completeData.signalType || null,
+        io_type: completeData.ioType || null,
+        plc_name: completeData.plcName || null,
+        rack: completeData.rack || null,
+        slot: completeData.slot || null,
+        channel: completeData.channel || null,
+        terminal_block: completeData.terminalBlock || null,
+        cable_id: completeData.cableId || null,
+        notes: completeData.notes || null,
+      };
+      const result: TauriIOPoint = await invoke('create_io_point', { ioPointData: tauriData });
       return this.mapTauriIOPointToIOPoint(result);
     } catch (error) {
       // Fall back to mock implementation for development
@@ -508,8 +585,20 @@ export class TauriDatabaseService {
   async updateIOPoint(id: number, updates: Partial<IOPoint>): Promise<IOPoint> {
     try {
       // Try to call Rust backend first
-      const tauriData = this.mapPartialIOPointToTauriIOPointData(updates);
-      const result: TauriIOPoint = await invoke('update_io_point', { id, data: tauriData });
+      const tauriData = {
+        tag: updates.tag || null,
+        description: updates.description || null,
+        signal_type: updates.signalType || null,
+        io_type: updates.ioType || null,
+        plc_name: updates.plcName || null,
+        rack: updates.rack || null,
+        slot: updates.slot || null,
+        channel: updates.channel || null,
+        terminal_block: updates.terminalBlock || null,
+        cable_id: updates.cableId || null,
+        notes: updates.notes || null,
+      };
+      const result: TauriIOPoint = await invoke('update_io_point', { id, updates: tauriData });
       return this.mapTauriIOPointToIOPoint(result);
     } catch (error) {
       // Fall back to mock implementation for development
@@ -806,5 +895,299 @@ export class TauriDatabaseService {
       updatedAt: new Date(tauriCable.updated_at),
       revisionId: tauriCable.revision_id,
     };
+  }
+
+  // Load operations
+  async getLoads(): Promise<Load[]> {
+    try {
+      const result: TauriLoad[] = await invoke('get_loads');
+      return result.map(tauriLoad => this.mapTauriLoadToLoad(tauriLoad));
+    } catch (error) {
+      // For development, return empty array
+      console.log('Using empty loads array for development');
+      return [];
+    }
+  }
+
+  async createLoad(data: Partial<Load>): Promise<Load> {
+    try {
+      const loadData = {
+        tag: data.tag || `L-${Date.now()}`,
+        description: data.description || null,
+        load_type: data.loadType || null,
+        power_kw: data.powerKw || null,
+        power_hp: data.powerHp || null,
+        voltage: data.voltage || null,
+        current: data.current || null,
+        power_factor: data.powerFactor || null,
+        efficiency: data.efficiency || null,
+        demand_factor: data.demandFactor || null,
+        cable_id: data.cableId || null,
+        feeder_cable: data.feederCable || null,
+        starter_type: data.starterType || null,
+        protection_type: data.protectionType || null,
+        notes: data.notes || null,
+      };
+      const result: TauriLoad = await invoke('create_load', { loadData });
+      return this.mapTauriLoadToLoad(result);
+    } catch (error) {
+      throw new Error(`Failed to create load: ${error}`);
+    }
+  }
+
+  async updateLoad(id: number, updates: Partial<Load>): Promise<Load> {
+    try {
+      const updateData = {
+        tag: updates.tag || null,
+        description: updates.description || null,
+        load_type: updates.loadType || null,
+        power_kw: updates.powerKw || null,
+        power_hp: updates.powerHp || null,
+        voltage: updates.voltage || null,
+        current: updates.current || null,
+        power_factor: updates.powerFactor || null,
+        efficiency: updates.efficiency || null,
+        demand_factor: updates.demandFactor || null,
+        cable_id: updates.cableId || null,
+        feeder_cable: updates.feederCable || null,
+        starter_type: updates.starterType || null,
+        protection_type: updates.protectionType || null,
+        notes: updates.notes || null,
+      };
+      const result: TauriLoad = await invoke('update_load', { id, updates: updateData });
+      return this.mapTauriLoadToLoad(result);
+    } catch (error) {
+      throw new Error(`Failed to update load: ${error}`);
+    }
+  }
+
+  async deleteLoad(id: number): Promise<void> {
+    try {
+      await invoke('delete_load', { id });
+    } catch (error) {
+      throw new Error(`Failed to delete load: ${error}`);
+    }
+  }
+
+  // Load mapping functions
+  private mapTauriLoadToLoad(tauriLoad: TauriLoad): Load {
+    return {
+      id: tauriLoad.id,
+      tag: tauriLoad.tag,
+      revisionId: tauriLoad.revision_id,
+      description: tauriLoad.description,
+      loadType: tauriLoad.load_type,
+      powerKw: tauriLoad.power_kw,
+      powerHp: tauriLoad.power_hp,
+      voltage: tauriLoad.voltage,
+      current: tauriLoad.current,
+      powerFactor: tauriLoad.power_factor,
+      efficiency: tauriLoad.efficiency,
+      demandFactor: tauriLoad.demand_factor,
+      connectedLoadKw: tauriLoad.connected_load_kw,
+      demandLoadKw: tauriLoad.demand_load_kw,
+      cableId: tauriLoad.cable_id,
+      feederCable: tauriLoad.feeder_cable,
+      starterType: tauriLoad.starter_type,
+      protectionType: tauriLoad.protection_type,
+      notes: tauriLoad.notes,
+      createdAt: new Date(tauriLoad.created_at),
+      updatedAt: new Date(tauriLoad.updated_at),
+    };
+  }
+
+  // Conduit operations
+  async getConduits(): Promise<Conduit[]> {
+    try {
+      const result: TauriConduit[] = await invoke('get_conduits');
+      return result.map(tauriConduit => this.mapTauriConduitToConduit(tauriConduit));
+    } catch (error) {
+      // For development, return empty array
+      console.log('Using empty conduits array for development');
+      return [];
+    }
+  }
+
+  async createConduit(data: Partial<Conduit>): Promise<Conduit> {
+    try {
+      const conduitData = {
+        tag: data.tag || `C-${Date.now()}`,
+        type: data.type || null,
+        size: data.size || null,
+        internal_diameter: data.internalDiameter || null,
+        from_location: data.fromLocation || null,
+        to_location: data.toLocation || null,
+        notes: data.notes || null,
+      };
+      const result: TauriConduit = await invoke('create_conduit', { conduitData });
+      return this.mapTauriConduitToConduit(result);
+    } catch (error) {
+      throw new Error(`Failed to create conduit: ${error}`);
+    }
+  }
+
+  async updateConduit(id: number, updates: Partial<Conduit>): Promise<Conduit> {
+    try {
+      const updateData = {
+        tag: updates.tag || null,
+        type: updates.type || null,
+        size: updates.size || null,
+        internal_diameter: updates.internalDiameter || null,
+        from_location: updates.fromLocation || null,
+        to_location: updates.toLocation || null,
+        notes: updates.notes || null,
+      };
+      const result: TauriConduit = await invoke('update_conduit', { id, updates: updateData });
+      return this.mapTauriConduitToConduit(result);
+    } catch (error) {
+      throw new Error(`Failed to update conduit: ${error}`);
+    }
+  }
+
+  async deleteConduit(id: number): Promise<void> {
+    try {
+      await invoke('delete_conduit', { id });
+    } catch (error) {
+      throw new Error(`Failed to delete conduit: ${error}`);
+    }
+  }
+
+  // Conduit mapping functions
+  private mapTauriConduitToConduit(tauriConduit: TauriConduit): Conduit {
+    return {
+      id: tauriConduit.id,
+      tag: tauriConduit.tag,
+      revisionId: tauriConduit.revision_id,
+      type: tauriConduit.type as ConduitType,
+      size: tauriConduit.size,
+      internalDiameter: tauriConduit.internal_diameter,
+      fillPercentage: tauriConduit.fill_percentage,
+      maxFillPercentage: tauriConduit.max_fill_percentage,
+      fromLocation: tauriConduit.from_location,
+      toLocation: tauriConduit.to_location,
+      notes: tauriConduit.notes,
+      createdAt: new Date(tauriConduit.created_at),
+      updatedAt: new Date(tauriConduit.updated_at),
+    };
+  }
+
+  // Tray operations
+  async getTrays(): Promise<Tray[]> {
+    try {
+      const result: TauriTray[] = await invoke('get_trays');
+      return result.map(tauriTray => this.mapTauriTrayToTray(tauriTray));
+    } catch (error) {
+      // For development, return empty array
+      console.log('Using empty trays array for development');
+      return [];
+    }
+  }
+
+  async createTray(data: Partial<Tray>): Promise<Tray> {
+    try {
+      const trayData = {
+        tag: data.tag || `T-${Date.now()}`,
+        type: data.type || null,
+        width: data.width || null,
+        height: data.height || null,
+        length: data.length || null,
+        material: data.material || null,
+        finish: data.finish || null,
+        from_location: data.fromLocation || null,
+        to_location: data.toLocation || null,
+        elevation: data.elevation || null,
+        support_spacing: data.supportSpacing || null,
+        load_rating: data.loadRating || null,
+        notes: data.notes || null,
+      };
+      const result: TauriTray = await invoke('create_tray', { trayData });
+      return this.mapTauriTrayToTray(result);
+    } catch (error) {
+      throw new Error(`Failed to create tray: ${error}`);
+    }
+  }
+
+  async updateTray(id: number, updates: Partial<Tray>): Promise<Tray> {
+    try {
+      const updateData = {
+        tag: updates.tag || null,
+        type: updates.type || null,
+        width: updates.width || null,
+        height: updates.height || null,
+        length: updates.length || null,
+        material: updates.material || null,
+        finish: updates.finish || null,
+        from_location: updates.fromLocation || null,
+        to_location: updates.toLocation || null,
+        elevation: updates.elevation || null,
+        support_spacing: updates.supportSpacing || null,
+        load_rating: updates.loadRating || null,
+        notes: updates.notes || null,
+      };
+      const result: TauriTray = await invoke('update_tray', { id, updates: updateData });
+      return this.mapTauriTrayToTray(result);
+    } catch (error) {
+      throw new Error(`Failed to update tray: ${error}`);
+    }
+  }
+
+  async deleteTray(id: number): Promise<void> {
+    try {
+      await invoke('delete_tray', { id });
+    } catch (error) {
+      throw new Error(`Failed to delete tray: ${error}`);
+    }
+  }
+
+  // Tray mapping functions
+  private mapTauriTrayToTray(tauriTray: TauriTray): Tray {
+    return {
+      id: tauriTray.id,
+      tag: tauriTray.tag,
+      revisionId: tauriTray.revision_id,
+      type: tauriTray.type as TrayType,
+      width: tauriTray.width,
+      height: tauriTray.height,
+      length: tauriTray.length,
+      fillPercentage: tauriTray.fill_percentage,
+      maxFillPercentage: tauriTray.max_fill_percentage,
+      material: tauriTray.material as TrayMaterial,
+      finish: tauriTray.finish,
+      fromLocation: tauriTray.from_location,
+      toLocation: tauriTray.to_location,
+      elevation: tauriTray.elevation,
+      supportSpacing: tauriTray.support_spacing,
+      loadRating: tauriTray.load_rating,
+      notes: tauriTray.notes,
+      createdAt: new Date(tauriTray.created_at),
+      updatedAt: new Date(tauriTray.updated_at),
+    };
+  }
+
+  // Fill calculation operations
+  async recalculateConduitFill(conduitId: number): Promise<number> {
+    try {
+      const fillPercentage: number = await invoke('recalculate_conduit_fill', { conduitId });
+      return fillPercentage;
+    } catch (error) {
+      throw new Error(`Failed to recalculate conduit fill: ${error}`);
+    }
+  }
+
+  async recalculateTrayFill(trayId: number): Promise<number> {
+    try {
+      const fillPercentage: number = await invoke('recalculate_tray_fill', { trayId });
+      return fillPercentage;
+    } catch (error) {
+      throw new Error(`Failed to recalculate tray fill: ${error}`);
+    }
+  }
+
+  async recalculateAllFills(): Promise<void> {
+    try {
+      await invoke('recalculate_all_fills');
+    } catch (error) {
+      throw new Error(`Failed to recalculate all fills: ${error}`);
+    }
   }
 }

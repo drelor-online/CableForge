@@ -3,6 +3,7 @@ import { ColDef } from 'ag-grid-community';
 import { ColumnDefinition } from '../services/column-service';
 import { Cable, CableFunction } from '../types';
 import CableTypeBadge from '../components/ui/CableTypeBadge';
+import { AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
 export function createColumnDef(column: ColumnDefinition): ColDef {
   const baseColDef: ColDef = {
@@ -216,6 +217,65 @@ export function createColumnDef(column: ColumnDefinition): ColDef {
           if (!params.value) return '';
           const text = params.value.toString();
           return text.length > 50 ? text.substring(0, 50) + '...' : text;
+        }
+      };
+
+    case 'voltageDropPercentage':
+      return {
+        ...baseColDef,
+        editable: false,
+        filter: 'agNumberColumnFilter',
+        cellClass: (params: any) => {
+          if (!params.value && params.value !== 0) return '';
+          
+          const voltageDropPercent = Number(params.value);
+          if (voltageDropPercent <= 3.0) {
+            return 'text-green-600 font-medium';
+          } else if (voltageDropPercent <= 5.0) {
+            return 'text-yellow-600 font-medium';
+          } else {
+            return 'text-red-600 font-medium';
+          }
+        },
+        cellRenderer: (params: any) => {
+          if (!params.value && params.value !== 0) {
+            return React.createElement('span', { className: 'text-gray-400 italic' }, 'Not calculated');
+          }
+          
+          const voltageDropPercent = Number(params.value);
+          const formatted = voltageDropPercent.toFixed(1) + '%';
+          
+          let icon;
+          let statusText;
+          
+          if (voltageDropPercent <= 3.0) {
+            icon = React.createElement(CheckCircle, { 
+              size: 16, 
+              className: 'inline mr-1 text-green-600' 
+            });
+            statusText = 'Compliant';
+          } else if (voltageDropPercent <= 5.0) {
+            icon = React.createElement(AlertTriangle, { 
+              size: 16, 
+              className: 'inline mr-1 text-yellow-600' 
+            });
+            statusText = 'High';
+          } else {
+            icon = React.createElement(XCircle, { 
+              size: 16, 
+              className: 'inline mr-1 text-red-600' 
+            });
+            statusText = 'Exceeds limit';
+          }
+          
+          return React.createElement('div', 
+            { 
+              className: 'flex items-center',
+              title: `${formatted} - ${statusText} (NEC: ≤3% recommended, ≤5% acceptable)`
+            },
+            icon,
+            React.createElement('span', null, formatted)
+          );
         }
       };
 

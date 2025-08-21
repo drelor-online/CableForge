@@ -732,3 +732,549 @@ fn estimate_cable_current(function: &Option<String>, size: &str) -> f64 {
         _ => 0.0, // Unknown function, can't estimate
     }
 }
+
+// I/O Point commands
+#[tauri::command]
+pub async fn create_io_point(
+    io_point_data: NewIOPoint,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<IOPoint, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.insert_io_point(project_id, &io_point_data)?)
+}
+
+#[tauri::command]
+pub async fn get_io_points(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<IOPoint>, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.get_io_points(project_id)?)
+}
+
+#[tauri::command]
+pub async fn update_io_point(
+    id: i64,
+    updates: UpdateIOPoint,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<IOPoint, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    Ok(db.update_io_point(id, &updates)?)
+}
+
+#[tauri::command]
+pub async fn delete_io_point(
+    id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    db.delete_io_point(id)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_io_points_by_plc(
+    plc_name: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<IOPoint>, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.get_io_points_by_plc(project_id, &plc_name)?)
+}
+
+#[tauri::command]
+pub async fn check_io_address_conflict(
+    plc_name: String,
+    rack: i32,
+    slot: i32,
+    channel: i32,
+    exclude_id: Option<i64>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<bool, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.check_io_address_conflict(project_id, &plc_name, rack, slot, channel, exclude_id)?)
+}
+
+// Load commands
+#[tauri::command]
+pub async fn create_load(
+    load_data: NewLoad,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Load, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.insert_load(project_id, &load_data)?)
+}
+
+#[tauri::command]
+pub async fn get_loads(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<Load>, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.get_loads(project_id)?)
+}
+
+#[tauri::command]
+pub async fn update_load(
+    id: i64,
+    updates: UpdateLoad,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Load, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    Ok(db.update_load(id, &updates)?)
+}
+
+#[tauri::command]
+pub async fn delete_load(
+    id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    db.delete_load(id)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_load_summary(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(f64, f64, i32), CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.get_load_summary(project_id)?)
+}
+
+// Conduit commands
+#[tauri::command]
+pub async fn create_conduit(
+    conduit_data: NewConduit,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Conduit, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.insert_conduit(project_id, &conduit_data)?)
+}
+
+#[tauri::command]
+pub async fn get_conduits(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<Conduit>, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.get_conduits(project_id)?)
+}
+
+#[tauri::command]
+pub async fn update_conduit(
+    id: i64,
+    updates: UpdateConduit,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Conduit, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    Ok(db.update_conduit(id, &updates)?)
+}
+
+#[tauri::command]
+pub async fn delete_conduit(
+    id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    db.delete_conduit(id)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_conduit_summary(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(i32, f64, i32), CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.get_conduit_summary(project_id)?)
+}
+
+// Tray commands
+#[tauri::command]
+pub async fn get_trays(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<Tray>, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.get_trays(project_id)?)
+}
+
+#[tauri::command]
+pub async fn create_tray(
+    tray_data: NewTray,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Tray, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.insert_tray(&tray_data, project_id, 1)?)
+}
+
+#[tauri::command]
+pub async fn update_tray(
+    id: i64,
+    updates: UpdateTray,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Tray, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    Ok(db.update_tray(id, &updates)?)
+}
+
+#[tauri::command]
+pub async fn delete_tray(
+    id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    db.delete_tray(id)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_tray_summary(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(i32, f64, i32), CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    Ok(db.get_tray_summary(project_id)?)
+}
+
+// Fill calculation commands
+#[tauri::command]
+pub async fn recalculate_conduit_fill(
+    conduit_id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<f64, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    let fill_percentage = db.calculate_conduit_fill_percentage(conduit_id)?;
+    Ok(fill_percentage)
+}
+
+#[tauri::command]
+pub async fn recalculate_tray_fill(
+    tray_id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<f64, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    let fill_percentage = db.calculate_tray_fill_percentage(tray_id)?;
+    Ok(fill_percentage)
+}
+
+#[tauri::command]
+pub async fn recalculate_all_fills(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    // Recalculate all conduit fills
+    let conduits = db.get_conduits(project_id)?;
+    for conduit in conduits {
+        if let Some(id) = conduit.id {
+            db.calculate_conduit_fill_percentage(id)?;
+        }
+    }
+    
+    // Recalculate all tray fills
+    let trays = db.get_trays(project_id)?;
+    for tray in trays {
+        if let Some(id) = tray.id {
+            db.calculate_tray_fill_percentage(id)?;
+        }
+    }
+    
+    Ok(())
+}
+
+// Revision tracking commands
+#[tauri::command]
+pub async fn create_revision(
+    major_revision: String,
+    minor_revision: i32,
+    description: Option<String>,
+    is_checkpoint: bool,
+    user_name: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Revision, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    let current_revision_id = db.get_current_revision_id(project_id).ok();
+    
+    let new_revision = NewRevision {
+        major_revision,
+        minor_revision,
+        description,
+        is_checkpoint,
+        is_auto_save: false,
+        user_name,
+        parent_revision_id: current_revision_id,
+    };
+    
+    let revision = db.create_revision(project_id, &new_revision)?;
+    Ok(revision)
+}
+
+#[tauri::command]
+pub async fn get_revision_history(
+    limit: Option<i32>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<RevisionSummary>, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    let revisions = db.get_revision_history(project_id, limit)?;
+    Ok(revisions)
+}
+
+#[tauri::command]
+pub async fn get_revision_by_id(
+    revision_id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Revision, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    let revision = db.get_revision_by_id(revision_id)?;
+    Ok(revision)
+}
+
+#[tauri::command]
+pub async fn get_revision_changes(
+    revision_id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<RevisionChange>, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    let changes = db.get_revision_changes(revision_id)?;
+    Ok(changes)
+}
+
+#[tauri::command]
+pub async fn get_entity_change_history(
+    entity_type: String,
+    entity_id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<RevisionChange>, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    let changes = db.get_entity_change_history(project_id, &entity_type, entity_id)?;
+    Ok(changes)
+}
+
+#[tauri::command]
+pub async fn track_entity_change(
+    entity_type: String,
+    entity_id: i64,
+    entity_tag: Option<String>,
+    change_type: String,
+    field_name: Option<String>,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<RevisionChange, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    // Get or create current revision
+    let revision_id = match db.get_current_revision_id(project_id) {
+        Ok(id) => id,
+        Err(_) => {
+            // Create an auto-save revision
+            let revision = db.create_auto_save_revision(project_id)?;
+            revision.id.unwrap()
+        }
+    };
+    
+    let new_change = NewRevisionChange {
+        entity_type,
+        entity_id,
+        entity_tag,
+        change_type,
+        field_name,
+        old_value,
+        new_value,
+    };
+    
+    let change = db.insert_revision_change(revision_id, &new_change)?;
+    Ok(change)
+}
+
+#[tauri::command]
+pub async fn create_checkpoint(
+    description: String,
+    user_name: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Revision, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    let checkpoint = db.create_checkpoint(project_id, description, user_name)?;
+    Ok(checkpoint)
+}
+
+#[tauri::command]
+pub async fn create_auto_save_revision(
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Revision, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    let revision = db.create_auto_save_revision(project_id)?;
+    Ok(revision)
+}
+
+#[tauri::command]
+pub async fn prune_old_revisions(
+    keep_count: i32,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<i32, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    let deleted_count = db.prune_old_revisions(project_id, keep_count)?;
+    Ok(deleted_count)
+}
+
+// Cable Library Commands
+
+#[tauri::command]
+pub async fn get_cable_library_items(
+    search_term: Option<String>,
+    category: Option<String>,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<CableLibraryItem>, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    let items = db.get_cable_library_items(search_term, category)?;
+    Ok(items)
+}
+
+#[tauri::command]
+pub async fn create_cable_library_item(
+    item: NewCableLibraryItem,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<CableLibraryItem, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    let created_item = db.create_cable_library_item(&item)?;
+    Ok(created_item)
+}
+
+#[tauri::command]
+pub async fn update_cable_library_item(
+    id: i64,
+    updates: UpdateCableLibraryItem,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<CableLibraryItem, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    let updated_item = db.update_cable_library_item(id, &updates)?;
+    Ok(updated_item)
+}
+
+#[tauri::command]
+pub async fn get_cable_library_item(
+    id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<CableLibraryItem, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    let item = db.get_cable_library_item(id)?;
+    Ok(item)
+}
+
+#[tauri::command]
+pub async fn delete_cable_library_item(
+    id: i64,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<(), CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    
+    db.delete_cable_library_item(id)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn import_cable_from_library(
+    library_id: i64,
+    tag: String,
+    state: State<'_, Mutex<AppState>>,
+) -> Result<Cable, CommandError> {
+    let app_state = state.lock().unwrap();
+    let db = app_state.db.as_ref().ok_or(CommandError::NoDatabase)?;
+    let project_id = app_state.current_project_id.ok_or(CommandError::NoProject)?;
+    
+    // Get the current revision ID (assuming we have this function)
+    let revision_id = db.get_current_revision_id(project_id)
+        .map_err(|_| CommandError::Custom("No current revision found".to_string()))?;
+    
+    let cable = db.import_cable_from_library(project_id, revision_id, library_id, tag)?;
+    Ok(cable)
+}

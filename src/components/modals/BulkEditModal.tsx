@@ -1,12 +1,15 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Cable, CableFunction, SegregationClass } from '../../types';
+import { Cable, CableFunction, SegregationClass, Tray, Conduit } from '../../types';
 import { useUI } from '../../contexts/UIContext';
+import { TauriDatabaseService } from '../../services/tauri-database';
 
 interface BulkEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (updates: Partial<Cable>) => Promise<void>;
   selectedCables: Cable[];
+  trays: Tray[];
+  conduits: Conduit[];
   isLoading?: boolean;
 }
 
@@ -29,6 +32,8 @@ interface BulkUpdateData {
   fromEquipment?: string;
   toEquipment?: string;
   length?: number;
+  trayId?: number;
+  conduitId?: number;
 }
 
 interface FieldUpdateState {
@@ -50,6 +55,8 @@ interface FieldUpdateState {
   fromEquipment: boolean;
   toEquipment: boolean;
   length: boolean;
+  trayId: boolean;
+  conduitId: boolean;
 }
 
 export const BulkEditModal: React.FC<BulkEditModalProps> = ({
@@ -57,6 +64,8 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
   onClose,
   onUpdate,
   selectedCables,
+  trays,
+  conduits,
   isLoading = false
 }) => {
   const { showError } = useUI();
@@ -80,7 +89,9 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
     notes: false,
     fromEquipment: false,
     toEquipment: false,
-    length: false
+    length: false,
+    trayId: false,
+    conduitId: false
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -107,11 +118,26 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
         notes: false,
         fromEquipment: false,
         toEquipment: false,
-        length: false
+        length: false,
+        trayId: false,
+        conduitId: false
       });
       setErrors({});
     }
   }, [isOpen]);
+
+  // Calculate total cable area for selected cables
+  const calculateTotalCableArea = useCallback((): number => {
+    return selectedCables.reduce((total, cable) => {
+      const diameter = cable.outerDiameter || 0;
+      if (diameter > 0) {
+        // Calculate area: π * (diameter/2)²
+        const area = Math.PI * Math.pow(diameter / 2, 2);
+        return total + area;
+      }
+      return total;
+    }, 0);
+  }, [selectedCables]);
 
   // Validation
   const validateForm = useCallback((): boolean => {
@@ -137,9 +163,55 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
       newErrors.length = 'Cable length must be greater than 0';
     }
 
+    // Validate tray assignment fill percentage
+    if (fieldsToUpdate.trayId && updateData.trayId) {
+      const tray = trays.find(t => t.id === updateData.trayId);
+      if (tray) {
+        const totalCableArea = calculateTotalCableArea();
+        const trayCapacity = (tray.width || 0) * (tray.height || 0);
+        
+        if (trayCapacity > 0) {
+          // Calculate current fill excluding cables that will be moved
+          const currentFillArea = (tray.fillPercentage || 0) * trayCapacity / 100;
+          const projectedFillArea = currentFillArea + totalCableArea;
+          const projectedFillPercentage = (projectedFillArea / trayCapacity) * 100;
+          
+          if (projectedFillPercentage > tray.maxFillPercentage) {
+            newErrors.trayId = `This assignment would exceed maximum fill capacity (${projectedFillPercentage.toFixed(1)}% > ${tray.maxFillPercentage}%)`;
+          } else if (projectedFillPercentage > 80) {
+            // Warning level, but not blocking
+            console.warn(`Tray ${tray.tag} will be at ${projectedFillPercentage.toFixed(1)}% capacity`);
+          }
+        }
+      }
+    }
+
+    // Validate conduit assignment fill percentage
+    if (fieldsToUpdate.conduitId && updateData.conduitId) {
+      const conduit = conduits.find(c => c.id === updateData.conduitId);
+      if (conduit) {
+        const totalCableArea = calculateTotalCableArea();
+        const conduitCapacity = Math.PI * Math.pow((conduit.internalDiameter || 0) / 2, 2);
+        
+        if (conduitCapacity > 0) {
+          // Calculate current fill excluding cables that will be moved
+          const currentFillArea = (conduit.fillPercentage || 0) * conduitCapacity / 100;
+          const projectedFillArea = currentFillArea + totalCableArea;
+          const projectedFillPercentage = (projectedFillArea / conduitCapacity) * 100;
+          
+          if (projectedFillPercentage > conduit.maxFillPercentage) {
+            newErrors.conduitId = `This assignment would exceed maximum fill capacity (${projectedFillPercentage.toFixed(1)}% > ${conduit.maxFillPercentage}%)`;
+          } else if (projectedFillPercentage > 80) {
+            // Warning level, but not blocking
+            console.warn(`Conduit ${conduit.tag} will be at ${projectedFillPercentage.toFixed(1)}% capacity`);
+          }
+        }
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [updateData, fieldsToUpdate]);
+  }, [updateData, fieldsToUpdate, trays, conduits, calculateTotalCableArea]);
 
   // Handle field selection change
   const handleFieldToggle = useCallback((field: keyof FieldUpdateState) => {
@@ -249,6 +321,32 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
     return values;
   };
 
+  const getCurrentTrayAssignments = (): string => {
+    const assignments = selectedCables.map(cable => {
+      if (!cable.trayId) return 'None';
+      const tray = trays.find(t => t.id === cable.trayId);
+      return tray ? tray.tag : 'Unknown';
+    });
+    const uniqueAssignments = Array.from(new Set(assignments));
+    if (uniqueAssignments.length === 1) {
+      return uniqueAssignments[0];
+    }
+    return `Mixed (${uniqueAssignments.join(', ')})`;
+  };
+
+  const getCurrentConduitAssignments = (): string => {
+    const assignments = selectedCables.map(cable => {
+      if (!cable.conduitId) return 'None';
+      const conduit = conduits.find(c => c.id === cable.conduitId);
+      return conduit ? conduit.tag : 'Unknown';
+    });
+    const uniqueAssignments = Array.from(new Set(assignments));
+    if (uniqueAssignments.length === 1) {
+      return uniqueAssignments[0];
+    }
+    return `Mixed (${uniqueAssignments.join(', ')})`;
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={onClose}>
       <div 
@@ -313,6 +411,23 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  const routingFields = ['route', 'trayId', 'conduitId'];
+                  setFieldsToUpdate(prev => {
+                    const newState = { ...prev };
+                    routingFields.forEach(field => {
+                      newState[field as keyof FieldUpdateState] = true;
+                    });
+                    return newState;
+                  });
+                }}
+                className="px-3 py-1 text-xs font-medium text-purple-700 bg-purple-100 rounded hover:bg-purple-200 transition-colors"
+                disabled={isLoading}
+              >
+                Select Routing Properties
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   const physicalFields = ['cableType', 'size', 'cores', 'manufacturer', 'partNumber'];
                   setFieldsToUpdate(prev => {
                     const newState = { ...prev };
@@ -348,7 +463,9 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                     notes: false,
                     fromEquipment: false,
                     toEquipment: false,
-                    length: false
+                    length: false,
+                    trayId: false,
+                    conduitId: false
                   });
                   setUpdateData({});
                 }}
@@ -491,6 +608,82 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
               />
               <div className="text-xs text-gray-500 mt-1">
                 Current: {getUniqueValues('route').join(', ') || 'Various or empty'}
+              </div>
+            </div>
+
+            {/* Tray Assignment */}
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  checked={fieldsToUpdate.trayId}
+                  onChange={() => handleFieldToggle('trayId')}
+                  className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label className={labelClass}>Tray Assignment</label>
+              </div>
+              <select
+                value={updateData.trayId || ''}
+                onChange={e => handleInputChange('trayId', e.target.value ? Number(e.target.value) : undefined)}
+                className={fieldsToUpdate.trayId ? (errors.trayId ? errorInputClass : inputClass) : disabledInputClass}
+                disabled={!fieldsToUpdate.trayId || isLoading}
+              >
+                <option value="">No tray assignment</option>
+                {trays.map(tray => {
+                  const fillColor = tray.fillPercentage > 80 ? 'red' : tray.fillPercentage > 50 ? 'orange' : 'green';
+                  return (
+                    <option 
+                      key={tray.id} 
+                      value={tray.id}
+                      style={{ color: fillColor }}
+                    >
+                      {tray.tag} ({tray.fillPercentage?.toFixed(1) || 0}% filled)
+                    </option>
+                  );
+                })}
+              </select>
+              {errors.trayId && <div className={errorClass}>{errors.trayId}</div>}
+              <div className="text-xs text-gray-500 mt-1">
+                Current: {getCurrentTrayAssignments()}
+              </div>
+            </div>
+
+            {/* Conduit Assignment */}
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  checked={fieldsToUpdate.conduitId}
+                  onChange={() => handleFieldToggle('conduitId')}
+                  className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label className={labelClass}>Conduit Assignment</label>
+              </div>
+              <select
+                value={updateData.conduitId || ''}
+                onChange={e => handleInputChange('conduitId', e.target.value ? Number(e.target.value) : undefined)}
+                className={fieldsToUpdate.conduitId ? (errors.conduitId ? errorInputClass : inputClass) : disabledInputClass}
+                disabled={!fieldsToUpdate.conduitId || isLoading}
+              >
+                <option value="">No conduit assignment</option>
+                {conduits.map(conduit => {
+                  const fillColor = conduit.fillPercentage > 80 ? 'red' : conduit.fillPercentage > 50 ? 'orange' : 'green';
+                  return (
+                    <option 
+                      key={conduit.id} 
+                      value={conduit.id}
+                      style={{ color: fillColor }}
+                    >
+                      {conduit.tag} ({conduit.fillPercentage?.toFixed(1) || 0}% filled)
+                    </option>
+                  );
+                })}
+              </select>
+              {errors.conduitId && <div className={errorClass}>{errors.conduitId}</div>}
+              <div className="text-xs text-gray-500 mt-1">
+                Current: {getCurrentConduitAssignments()}
               </div>
             </div>
 

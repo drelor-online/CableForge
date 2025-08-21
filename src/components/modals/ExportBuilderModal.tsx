@@ -2,6 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { Cable } from '../../types';
 import { ColumnDefinition } from '../../services/column-service';
 import { ExportOptions, ExportPreset, exportService } from '../../services/export-service';
+import { 
+  X,
+  FileText,
+  CheckCircle2,
+  Download
+} from 'lucide-react';
 
 interface ExportBuilderModalProps {
   isOpen: boolean;
@@ -145,9 +151,7 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-6 h-6" />
           </button>
         </div>
 
@@ -161,9 +165,7 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
                 onClick={() => handleQuickExport('all')}
                 className="w-full px-4 py-3 text-left bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-3"
               >
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                <FileText className="w-5 h-5 text-green-600" />
                 <div>
                   <div className="font-medium">Export All to Excel</div>
                   <div className="text-sm text-gray-500">{data.length} cables</div>
@@ -175,9 +177,7 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
                   onClick={() => handleQuickExport('selected')}
                   className="w-full px-4 py-3 text-left bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-3"
                 >
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
+                  <CheckCircle2 className="w-5 h-5 text-blue-600" />
                   <div>
                     <div className="font-medium">Export Selected to Excel</div>
                     <div className="text-sm text-gray-500">{selectedRowIds.length} cables</div>
@@ -189,9 +189,7 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
                 onClick={() => handleQuickExport('csv')}
                 className="w-full px-4 py-3 text-left bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-3"
               >
-                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                <Download className="w-5 h-5 text-orange-600" />
                 <div>
                   <div className="font-medium">Export to CSV</div>
                   <div className="text-sm text-gray-500">Visible columns only</div>

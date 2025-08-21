@@ -1,11 +1,74 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { CableTypeLibrary, Cable, CableFunction, SegregationClass } from '../../types';
 import { useUI } from '../../contexts/UIContext';
+import { invoke } from '@tauri-apps/api/tauri';
+import { 
+  X,
+  Search,
+  BookOpen,
+  Plus
+} from 'lucide-react';
+
+// Backend types for cable library
+interface CableLibraryItem {
+  id?: number;
+  name: string;
+  manufacturer?: string;
+  part_number?: string;
+  cable_type: string;
+  size: string;
+  cores: number;
+  voltage_rating?: number;
+  current_rating?: number;
+  outer_diameter?: number;
+  weight_per_meter?: number;
+  temperature_rating?: number;
+  conductor_material: string;
+  insulation_type?: string;
+  jacket_material?: string;
+  shielding?: string;
+  armor?: string;
+  fire_rating?: string;
+  category: string;
+  description?: string;
+  specifications?: string;
+  datasheet_url?: string;
+  cost_per_meter?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface NewCableLibraryItem {
+  name: string;
+  manufacturer?: string;
+  part_number?: string;
+  cable_type: string;
+  size: string;
+  cores: number;
+  voltage_rating?: number;
+  current_rating?: number;
+  outer_diameter?: number;
+  weight_per_meter?: number;
+  temperature_rating?: number;
+  conductor_material: string;
+  insulation_type?: string;
+  jacket_material?: string;
+  shielding?: string;
+  armor?: string;
+  fire_rating?: string;
+  category: string;
+  description?: string;
+  specifications?: string;
+  datasheet_url?: string;
+  cost_per_meter?: number;
+  is_active?: boolean;
+}
 
 interface CableLibraryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddFromLibrary: (libraryItem: CableTypeLibrary) => Promise<void>;
+  onAddFromLibrary: (libraryItem: CableLibraryItem) => Promise<void>;
   onSaveToLibrary?: (cable: Cable) => Promise<void>;
   isLoading?: boolean;
 }
@@ -20,108 +83,64 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
   const { showError, showSuccess } = useUI();
   
   const [activeTab, setActiveTab] = useState<'browse' | 'add'>('browse');
-  const [library, setLibrary] = useState<CableTypeLibrary[]>([]);
-  const [selectedItem, setSelectedItem] = useState<CableTypeLibrary | null>(null);
+  const [library, setLibrary] = useState<CableLibraryItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<CableLibraryItem | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [loading, setLoading] = useState(false);
   
   // New library item form
-  const [newItem, setNewItem] = useState<Partial<CableTypeLibrary>>({
+  const [newItem, setNewItem] = useState<NewCableLibraryItem>({
     name: '',
     manufacturer: '',
-    partNumber: '',
-    description: '',
-    voltageRating: undefined,
-    cores: undefined,
+    part_number: '',
+    cable_type: '',
     size: '',
-    cableType: '',
-    outerDiameter: undefined,
-    weight: undefined,
-    temperatureRating: undefined,
-    isArmored: false,
-    isShielded: false
+    cores: 1,
+    voltage_rating: undefined,
+    current_rating: undefined,
+    outer_diameter: undefined,
+    weight_per_meter: undefined,
+    temperature_rating: undefined,
+    conductor_material: 'Copper',
+    insulation_type: '',
+    jacket_material: '',
+    shielding: '',
+    armor: '',
+    fire_rating: '',
+    category: 'Power',
+    description: '',
+    specifications: '',
+    datasheet_url: '',
+    cost_per_meter: undefined,
+    is_active: true
   });
 
-  // Load library on mount (mock data for now)
+  const loadLibrary = useCallback(async () => {
+    try {
+      setLoading(true);
+      const items = await invoke<CableLibraryItem[]>('get_cable_library_items', {
+        search_term: searchTerm || null,
+        category: selectedCategory || null
+      });
+      setLibrary(items);
+    } catch (error) {
+      console.error('Failed to load cable library:', error);
+      showError('Failed to load cable library');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, selectedCategory, showError]);
+
+  // Load library on mount and when search/category changes
   useEffect(() => {
     if (isOpen) {
       loadLibrary();
     }
-  }, [isOpen]);
+  }, [isOpen, loadLibrary]);
 
-  const loadLibrary = useCallback(async () => {
-    try {
-      // TODO: Load from actual database
-      const mockLibrary: CableTypeLibrary[] = [
-        {
-          id: 1,
-          name: 'TECK90 Power Cable',
-          manufacturer: 'Nexans',
-          partNumber: 'T90-12-3C',
-          description: '12 AWG 3-conductor power cable',
-          voltageRating: 600,
-          cores: 3,
-          size: '12 AWG',
-          cableType: 'TECK90',
-          outerDiameter: 15.2,
-          weight: 0.85,
-          temperatureRating: 90,
-          isArmored: true,
-          isShielded: false,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        {
-          id: 2,
-          name: 'Instrumentation Signal Cable',
-          manufacturer: 'Belden',
-          partNumber: '9501-2PR-24',
-          description: '24 AWG 2-pair instrumentation cable',
-          voltageRating: 300,
-          cores: 4,
-          size: '24 AWG',
-          cableType: 'Instrumentation',
-          outerDiameter: 8.4,
-          weight: 0.12,
-          temperatureRating: 75,
-          isArmored: false,
-          isShielded: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        {
-          id: 3,
-          name: 'Control Cable THWN-2',
-          manufacturer: 'Southwire',
-          partNumber: 'THWN-2-16-7C',
-          description: '16 AWG 7-conductor control cable',
-          voltageRating: 600,
-          cores: 7,
-          size: '16 AWG',
-          cableType: 'THWN-2',
-          outerDiameter: 12.7,
-          weight: 0.45,
-          temperatureRating: 90,
-          isArmored: false,
-          isShielded: false,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      ];
-      
-      setLibrary(mockLibrary);
-    } catch (error) {
-      showError(`Failed to load cable library: ${error}`);
-    }
-  }, [showError]);
-
-  // Filter library based on search
-  const filteredLibrary = library.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.manufacturer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.partNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.cableType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.size?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // No need for client-side filtering since backend handles it
+  const filteredLibrary = library;
 
   const handleAddFromLibrary = useCallback(async () => {
     if (!selectedItem) {
@@ -203,7 +222,7 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
             className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
             disabled={isLoading}
           >
-            ✕
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -245,7 +264,7 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
                   className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-400">🔍</span>
+                  <Search className="w-4 h-4 text-gray-400" />
                 </div>
               </div>
 
@@ -253,7 +272,7 @@ export const CableLibraryModal: React.FC<CableLibraryModalProps> = ({
               <div className="grid gap-4 max-h-96 overflow-y-auto">
                 {filteredLibrary.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    <div className="text-4xl mb-4">📚</div>
+                    <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                     <div className="text-lg font-medium mb-2">No cables found</div>
                     <div className="text-sm">Try a different search term or add cables to the library</div>
                   </div>

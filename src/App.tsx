@@ -1,20 +1,40 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import AppShell from './components/layout/AppShell';
 import CableTable from './components/tables/CableTable';
+import IOTable from './components/tables/IOTable';
+import LoadTable from './components/tables/LoadTable';
+import ConduitTable from './components/tables/ConduitTable';
+import TrayTable from './components/tables/TrayTable';
+import EngineeringDashboard from './components/dashboard/EngineeringDashboard';
 import EditCableModal from './components/modals/EditCableModal';
+import { EditIOPointModal } from './components/modals/EditIOPointModal';
+import { EditLoadModal } from './components/modals/EditLoadModal';
+import { EditConduitModal } from './components/modals/EditConduitModal';
+import { EditTrayModal } from './components/modals/EditTrayModal';
 import BulkEditModal from './components/modals/BulkEditModal';
+import BulkEditConduitModal from './components/modals/BulkEditConduitModal';
+import BulkEditTrayModal from './components/modals/BulkEditTrayModal';
+import BulkEditLoadModal from './components/modals/BulkEditLoadModal';
+import BulkEditIOModal from './components/modals/BulkEditIOModal';
 import CableLibraryModal from './components/modals/CableLibraryModal';
 import AutoNumberingModal from './components/modals/AutoNumberingModal';
 import FindReplaceModal from './components/modals/FindReplaceModal';
 import ExportBuilderModal from './components/modals/ExportBuilderModal';
+import MultiSheetExportModal from './components/modals/MultiSheetExportModal';
 import ImportWizardModal from './components/modals/ImportWizardModal';
+import RevisionHistoryPanel from './components/revision/RevisionHistoryPanel';
+import RevisionComparisonModal from './components/revision/RevisionComparisonModal';
+import TemplateSelectionModal from './components/modals/TemplateSelectionModal';
 import { useAppStore } from './stores/useAppStore';
 import { useDatabaseStore } from './stores/useDatabaseStore';
 import { validationService } from './services/validation-service';
+import { revisionService } from './services/revision-service';
+import { templateService } from './services/template-service';
 import { useUI } from './contexts/UIContext';
-import { Cable, CableTypeLibrary } from './types';
+import { Cable, CableTypeLibrary, ProjectTemplate, IOPoint, Load, Conduit, Tray } from './types';
 import { AutoNumberingSettings } from './types/settings';
 import { columnService } from './services/column-service';
+import { columnServiceAggregator } from './services/column-service-aggregator';
 
 function App() {
   const { showSuccess, showError, showInfo } = useUI();
@@ -35,6 +55,19 @@ function App() {
     project,
     cables,
     selectedCables,
+    ioPoints,
+    selectedIOPoints,
+    setSelectedIOPoints,
+    plcCards,
+    loads,
+    selectedLoads,
+    setSelectedLoads,
+    conduits,
+    selectedConduits,
+    setSelectedConduits,
+    trays,
+    selectedTrays,
+    setSelectedTrays,
     isInitializing,
     isLoading: dbLoading,
     error,
@@ -42,8 +75,23 @@ function App() {
     addCable,
     updateCable,
     deleteCable,
+    addIOPoint,
+    updateIOPoint,
+    deleteIOPoint,
+    updateLoad,
+    deleteLoad,
+    addLoad,
+    addConduit,
+    updateConduit,
+    deleteConduit,
+    addTray,
+    updateTray,
+    deleteTray,
     setSelectedCables,
     getNextCableTag,
+    getNextConduitTag,
+    getNextLoadTag,
+    getNextTrayTag,
     newProject,
     openProject,
     saveProject,
@@ -71,18 +119,42 @@ function App() {
   // Modal states
   const [showEditCableModal, setShowEditCableModal] = useState(false);
   const [editingCable, setEditingCable] = useState<Cable | null>(null);
+  const [showEditIOPointModal, setShowEditIOPointModal] = useState(false);
+  const [editingIOPoint, setEditingIOPoint] = useState<IOPoint | null>(null);
+  const [showEditLoadModal, setShowEditLoadModal] = useState(false);
+  const [editingLoad, setEditingLoad] = useState<Load | null>(null);
+  const [showEditConduitModal, setShowEditConduitModal] = useState(false);
+  const [editingConduit, setEditingConduit] = useState<Conduit | null>(null);
+  const [showEditTrayModal, setShowEditTrayModal] = useState(false);
+  const [editingTray, setEditingTray] = useState<Tray | null>(null);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [showBulkEditConduitModal, setShowBulkEditConduitModal] = useState(false);
+  const [showBulkEditTrayModal, setShowBulkEditTrayModal] = useState(false);
+  const [showBulkEditLoadModal, setShowBulkEditLoadModal] = useState(false);
+  const [showBulkEditIOModal, setShowBulkEditIOModal] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [showAutoNumberingModal, setShowAutoNumberingModal] = useState(false);
   const [showFindReplaceModal, setShowFindReplaceModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showMultiSheetExportModal, setShowMultiSheetExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showRevisionHistory, setShowRevisionHistory] = useState(false);
+  const [showRevisionComparison, setShowRevisionComparison] = useState(false);
+  const [comparisonRevisions, setComparisonRevisions] = useState<{ revisionA: number | null; revisionB: number | null }>({ revisionA: null, revisionB: null });
+  const [showTemplateSelection, setShowTemplateSelection] = useState(false);
+  const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
 
-  // Initialize database on mount
+  // Initialize database and revision service on mount
   useEffect(() => {
     if (!db && !isInitializing) {
       console.log('App.tsx: Initializing database...');
       initializeDatabase();
+    } else if (db && !isInitializing) {
+      // Initialize revision and template services after database is ready
+      console.log('App.tsx: Initializing revision service...');
+      revisionService.initialize();
+      console.log('App.tsx: Initializing template service...');
+      templateService.initialize(db);
     }
   }, [db, isInitializing, initializeDatabase]);
 
@@ -131,14 +203,10 @@ function App() {
     setActiveTab(tab);
   }, [setActiveTab]);
 
-  const handleNewProject = useCallback(async () => {
-    try {
-      await newProject();
-      console.log('New project created');
-    } catch (error) {
-      console.error('Failed to create new project:', error);
-    }
-  }, [newProject]);
+  const handleNewProject = useCallback(() => {
+    // Show template selection modal instead of creating project directly
+    setShowTemplateSelection(true);
+  }, []);
 
   const handleSaveProject = useCallback(async () => {
     try {
@@ -196,14 +264,207 @@ function App() {
     setEditingCable(null);
   }, []);
 
+  const handleCloseEditIOPointModal = useCallback(() => {
+    setShowEditIOPointModal(false);
+    setEditingIOPoint(null);
+  }, []);
+
+  const handleCloseEditLoadModal = useCallback(() => {
+    setShowEditLoadModal(false);
+    setEditingLoad(null);
+  }, []);
+
+  const handleCloseEditConduitModal = useCallback(() => {
+    setShowEditConduitModal(false);
+    setEditingConduit(null);
+  }, []);
+
+  const handleCloseEditTrayModal = useCallback(() => {
+    setShowEditTrayModal(false);
+    setEditingTray(null);
+  }, []);
+
   const handleAddFromLibrary = useCallback(() => {
     console.log('handleAddFromLibrary: Opening library modal');
     setShowLibraryModal(true);
   }, []);
 
+  // I/O Point handlers
+  const handleIOPointEdit = useCallback((ioPoint: IOPoint) => {
+    setEditingIOPoint(ioPoint);
+    setShowEditIOPointModal(true);
+  }, []);
+
+  const handleIOBulkEdit = useCallback(() => {
+    console.log('Bulk edit IO points:', selectedIOPoints);
+    if (selectedIOPoints.length === 0) {
+      showError('Please select I/O points to edit');
+      return;
+    }
+    setShowBulkEditIOModal(true);
+  }, [selectedIOPoints, showError]);
+
+  const handleAddIOPoint = useCallback(() => {
+    // TODO: Implement add I/O point modal
+    console.log('Add I/O point');
+  }, []);
+
+  const handleIOPointUpdate = useCallback(async (id: number, updates: any) => {
+    try {
+      if (id === -1) {
+        // Create new I/O point
+        await addIOPoint(updates);
+        showSuccess('I/O point created successfully');
+      } else {
+        // Update existing I/O point
+        await updateIOPoint(id, updates);
+        showSuccess('I/O point updated successfully');
+      }
+    } catch (error) {
+      console.error('Failed to update I/O point:', error);
+      showError(id === -1 ? 'Failed to create I/O point' : 'Failed to update I/O point');
+    }
+  }, [addIOPoint, updateIOPoint, showSuccess, showError]);
+
+  // Load handlers
+  const handleLoadEdit = useCallback((load: Load) => {
+    setEditingLoad(load);
+    setShowEditLoadModal(true);
+  }, []);
+
+  const handleLoadBulkEdit = useCallback(() => {
+    console.log('Bulk edit loads:', selectedLoads);
+    if (selectedLoads.length === 0) {
+      showError('Please select loads to edit');
+      return;
+    }
+    setShowBulkEditLoadModal(true);
+  }, [selectedLoads, showError]);
+
+  const handleAddLoad = useCallback(() => {
+    // TODO: Trigger inline add in LoadTable
+    console.log('Add load inline');
+  }, []);
+
+  const handleLoadUpdate = useCallback(async (id: number, updates: any) => {
+    try {
+      if (id === -1) {
+        // Create new load
+        await addLoad(updates);
+        showSuccess('Load created successfully');
+      } else {
+        // Update existing load
+        await updateLoad(id, updates);
+        showSuccess('Load updated successfully');
+      }
+    } catch (error) {
+      console.error('Failed to update load:', error);
+      showError(id === -1 ? 'Failed to create load' : 'Failed to update load');
+    }
+  }, [addLoad, updateLoad, showSuccess, showError]);
+
+  // Conduit handlers
+  const handleAddConduit = useCallback(() => {
+    // TODO: Trigger inline add in ConduitTable
+    console.log('Add conduit inline');
+  }, []);
+
+  const handleConduitUpdate = useCallback(async (id: number, updates: any) => {
+    try {
+      if (id === -1) {
+        // Create new conduit
+        await addConduit(updates);
+        showSuccess('Conduit created successfully');
+      } else {
+        // Update existing conduit
+        await updateConduit(id, updates);
+        showSuccess('Conduit updated successfully');
+      }
+    } catch (error) {
+      console.error('Failed to update conduit:', error);
+      showError(id === -1 ? 'Failed to create conduit' : 'Failed to update conduit');
+    }
+  }, [addConduit, updateConduit, showSuccess, showError]);
+
+  const handleConduitDelete = useCallback(async (id: number) => {
+    try {
+      await deleteConduit(id);
+      showSuccess('Conduit deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete conduit:', error);
+      showError('Failed to delete conduit');
+    }
+  }, [deleteConduit, showSuccess, showError]);
+
+  const handleConduitEdit = useCallback((conduit: Conduit) => {
+    setEditingConduit(conduit);
+    setShowEditConduitModal(true);
+  }, []);
+
+  const handleConduitBulkEdit = useCallback(() => {
+    console.log('Bulk edit conduits:', selectedConduits);
+    if (selectedConduits.length === 0) {
+      showError('Please select conduits to edit');
+      return;
+    }
+    setShowBulkEditConduitModal(true);
+  }, [selectedConduits, showError]);
+
+  // Tray handlers
+  const handleAddTray = useCallback(() => {
+    // TODO: Implement inline add for trays
+    console.log('Add tray inline');
+  }, []);
+
+  const handleTrayUpdate = useCallback(async (id: number, updates: any) => {
+    try {
+      if (id === -1) {
+        // Create new tray
+        await addTray(updates);
+        showSuccess('Tray created successfully');
+      } else {
+        // Update existing tray
+        await updateTray(id, updates);
+        showSuccess('Tray updated successfully');
+      }
+    } catch (error) {
+      console.error('Failed to update tray:', error);
+      showError(id === -1 ? 'Failed to create tray' : 'Failed to update tray');
+    }
+  }, [addTray, updateTray, showSuccess, showError]);
+
+  const handleTrayDelete = useCallback(async (id: number) => {
+    try {
+      await deleteTray(id);
+      showSuccess('Tray deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete tray:', error);
+      showError('Failed to delete tray');
+    }
+  }, [deleteTray, showSuccess, showError]);
+
+  const handleTrayEdit = useCallback((tray: Tray) => {
+    setEditingTray(tray);
+    setShowEditTrayModal(true);
+  }, []);
+
+  const handleTrayBulkEdit = useCallback(() => {
+    console.log('Bulk edit trays:', selectedTrays);
+    if (selectedTrays.length === 0) {
+      showError('Please select trays to edit');
+      return;
+    }
+    setShowBulkEditTrayModal(true);
+  }, [selectedTrays, showError]);
+
   const handleExport = useCallback(() => {
     console.log('handleExport: Opening export modal');
     setShowExportModal(true);
+  }, []);
+
+  const handleMultiSheetExport = useCallback(() => {
+    console.log('handleMultiSheetExport: Opening multi-sheet export modal');
+    setShowMultiSheetExportModal(true);
   }, []);
 
   const handleFiltersChange = useCallback((filters: {
@@ -245,6 +506,7 @@ function App() {
     setShowLibraryModal(false);
   }, []);
 
+
   const handleBulkEdit = useCallback(() => {
     console.log('handleBulkEdit: Opening bulk edit modal with selected cables:', selectedCables);
     if (selectedCables.length === 0) {
@@ -260,16 +522,151 @@ function App() {
       // Update each selected cable
       const promises = selectedCables.map(id => updateCable(id, updates));
       await Promise.all(promises);
+      
+      // If tray or conduit assignments were updated, recalculate fill percentages
+      if (updates.trayId !== undefined || updates.conduitId !== undefined) {
+        try {
+          console.log('Bulk update: Recalculating fill percentages...');
+          const databaseService = (await import('./services/tauri-database')).TauriDatabaseService.getInstance();
+          
+          // Collect unique tray/conduit IDs that were affected
+          const affectedTrayIds = new Set<number>();
+          const affectedConduitIds = new Set<number>();
+          
+          // Add new assignments
+          if (updates.trayId) {
+            affectedTrayIds.add(updates.trayId);
+          }
+          if (updates.conduitId) {
+            affectedConduitIds.add(updates.conduitId);
+          }
+          
+          // Add old assignments (cables that were moved from other containers)
+          const affectedCables = cables.filter(cable => cable.id && selectedCables.includes(cable.id));
+          affectedCables.forEach(cable => {
+            if (cable.trayId && cable.trayId !== updates.trayId) {
+              affectedTrayIds.add(cable.trayId);
+            }
+            if (cable.conduitId && cable.conduitId !== updates.conduitId) {
+              affectedConduitIds.add(cable.conduitId);
+            }
+          });
+          
+          // Recalculate fills for all affected containers
+          const recalcPromises = [];
+          for (const trayId of affectedTrayIds) {
+            recalcPromises.push(databaseService.recalculateTrayFill(trayId));
+          }
+          for (const conduitId of affectedConduitIds) {
+            recalcPromises.push(databaseService.recalculateConduitFill(conduitId));
+          }
+          
+          await Promise.all(recalcPromises);
+          console.log(`Bulk update: Recalculated fills for ${affectedTrayIds.size} trays and ${affectedConduitIds.size} conduits`);
+        } catch (fillError) {
+          console.error('Failed to recalculate fill percentages:', fillError);
+          // Don't fail the entire operation for fill calculation errors
+        }
+      }
+      
       showSuccess(`${selectedCables.length} cable${selectedCables.length !== 1 ? 's' : ''} updated successfully!`);
     } catch (error) {
       console.error('handleModalBulkUpdate: Failed to update cables:', error);
       throw error; // Re-throw so modal can handle it
     }
-  }, [selectedCables, updateCable, showSuccess]);
+  }, [selectedCables, updateCable, cables, showSuccess]);
 
   const handleCloseBulkEditModal = useCallback(() => {
     setShowBulkEditModal(false);
   }, []);
+
+  const handleCloseBulkEditConduitModal = useCallback(() => {
+    setShowBulkEditConduitModal(false);
+  }, []);
+
+  const handleCloseBulkEditTrayModal = useCallback(() => {
+    setShowBulkEditTrayModal(false);
+  }, []);
+
+  const handleCloseBulkEditLoadModal = useCallback(() => {
+    setShowBulkEditLoadModal(false);
+  }, []);
+
+  const handleCloseBulkEditIOModal = useCallback(() => {
+    setShowBulkEditIOModal(false);
+  }, []);
+
+  const handleBulkUpdateConduits = useCallback(async (updates: Partial<any>, selectedFields: string[]) => {
+    try {
+      const fieldsToUpdate = selectedFields.reduce((acc, field) => {
+        if (updates[field] !== undefined) {
+          acc[field] = updates[field];
+        }
+        return acc;
+      }, {} as any);
+
+      const promises = selectedConduits.map(id => updateConduit(id, fieldsToUpdate));
+      await Promise.all(promises);
+      showSuccess(`${selectedConduits.length} conduit${selectedConduits.length !== 1 ? 's' : ''} updated successfully!`);
+    } catch (error) {
+      console.error('Failed to bulk update conduits:', error);
+      throw error;
+    }
+  }, [selectedConduits, updateConduit, showSuccess]);
+
+  const handleBulkUpdateTrays = useCallback(async (updates: Partial<any>, selectedFields: string[]) => {
+    try {
+      const fieldsToUpdate = selectedFields.reduce((acc, field) => {
+        if (updates[field] !== undefined) {
+          acc[field] = updates[field];
+        }
+        return acc;
+      }, {} as any);
+
+      const promises = selectedTrays.map(id => updateTray(id, fieldsToUpdate));
+      await Promise.all(promises);
+      showSuccess(`${selectedTrays.length} tray${selectedTrays.length !== 1 ? 's' : ''} updated successfully!`);
+    } catch (error) {
+      console.error('Failed to bulk update trays:', error);
+      throw error;
+    }
+  }, [selectedTrays, updateTray, showSuccess]);
+
+  const handleBulkUpdateLoads = useCallback(async (updates: Partial<any>, selectedFields: string[]) => {
+    try {
+      const fieldsToUpdate = selectedFields.reduce((acc, field) => {
+        if (updates[field] !== undefined) {
+          acc[field] = updates[field];
+        }
+        return acc;
+      }, {} as any);
+
+      const promises = selectedLoads.map(id => updateLoad(id, fieldsToUpdate));
+      await Promise.all(promises);
+      showSuccess(`${selectedLoads.length} load${selectedLoads.length !== 1 ? 's' : ''} updated successfully!`);
+    } catch (error) {
+      console.error('Failed to bulk update loads:', error);
+      throw error;
+    }
+  }, [selectedLoads, updateLoad, showSuccess]);
+
+  const handleBulkUpdateIOPoints = useCallback(async (updates: Partial<any>, selectedFields: string[]) => {
+    try {
+      const fieldsToUpdate = selectedFields.reduce((acc, field) => {
+        if (updates[field] !== undefined) {
+          acc[field] = updates[field];
+        }
+        return acc;
+      }, {} as any);
+
+      const promises = selectedIOPoints.map(id => updateIOPoint(id, fieldsToUpdate));
+      await Promise.all(promises);
+      showSuccess(`${selectedIOPoints.length} I/O point${selectedIOPoints.length !== 1 ? 's' : ''} updated successfully!`);
+    } catch (error) {
+      console.error('Failed to bulk update I/O points:', error);
+      throw error;
+    }
+  }, [selectedIOPoints, updateIOPoint, showSuccess]);
 
   const handleOpenAutoNumbering = useCallback(() => {
     setShowAutoNumberingModal(true);
@@ -298,6 +695,10 @@ function App() {
     setShowExportModal(false);
   }, []);
 
+  const handleCloseMultiSheetExport = useCallback(() => {
+    setShowMultiSheetExportModal(false);
+  }, []);
+
   const handleImport = useCallback(() => {
     console.log('handleImport: Opening import modal');
     setShowImportModal(true);
@@ -305,6 +706,40 @@ function App() {
 
   const handleCloseImport = useCallback(() => {
     setShowImportModal(false);
+  }, []);
+
+  // Revision control handlers
+  const handleShowRevisionHistory = useCallback(() => {
+    setShowRevisionHistory(true);
+  }, []);
+
+  const handleCloseRevisionHistory = useCallback(() => {
+    setShowRevisionHistory(false);
+  }, []);
+
+  const handleCreateCheckpoint = useCallback(async () => {
+    try {
+      const description = prompt('Enter a description for this checkpoint (optional):');
+      await revisionService.createCheckpoint(description || undefined);
+      showSuccess('Checkpoint created successfully!');
+      // Refresh revision history if it's open
+      if (showRevisionHistory) {
+        // The panel will automatically refresh when it detects new data
+      }
+    } catch (error) {
+      console.error('Failed to create checkpoint:', error);
+      showError('Failed to create checkpoint');
+    }
+  }, [showSuccess, showError, showRevisionHistory]);
+
+  const handleCompareRevisions = useCallback((revisionA: number, revisionB: number) => {
+    setComparisonRevisions({ revisionA, revisionB });
+    setShowRevisionComparison(true);
+  }, []);
+
+  const handleCloseRevisionComparison = useCallback(() => {
+    setShowRevisionComparison(false);
+    setComparisonRevisions({ revisionA: null, revisionB: null });
   }, []);
 
   const handleImportCables = useCallback(async (cables: Partial<Cable>[]) => {
@@ -345,6 +780,107 @@ function App() {
     }
   }, [updateCable, showSuccess]);
 
+  // Template handlers
+  const handleSelectTemplate = useCallback(async (template: ProjectTemplate, projectName: string) => {
+    try {
+      console.log('Creating project from template:', template.name, 'with name:', projectName);
+      
+      // Create project from template
+      const { project: projectData, data: templateData } = await templateService.createProjectFromTemplate(template, projectName);
+      
+      // Create new project in database
+      await newProject(projectData);
+      
+      // If template includes sample data, add it to the project
+      if (templateData) {
+        // Add sample cables
+        if (templateData.cables && templateData.cables.length > 0) {
+          for (const cableData of templateData.cables) {
+            await addCable(cableData);
+          }
+        }
+        
+        // Add sample loads
+        if (templateData.loads && templateData.loads.length > 0) {
+          for (const loadData of templateData.loads) {
+            await addLoad(loadData);
+          }
+        }
+        
+        // Add sample conduits
+        if (templateData.conduits && templateData.conduits.length > 0) {
+          for (const conduitData of templateData.conduits) {
+            await addConduit(conduitData);
+          }
+        }
+        
+        // Add sample trays
+        if (templateData.trays && templateData.trays.length > 0) {
+          for (const trayData of templateData.trays) {
+            await addTray(trayData);
+          }
+        }
+        
+        // Add sample I/O points
+        if (templateData.ioPoints && templateData.ioPoints.length > 0) {
+          for (const ioData of templateData.ioPoints) {
+            await addIOPoint(ioData);
+          }
+        }
+      }
+      
+      setShowTemplateSelection(false);
+      showSuccess(`Project "${projectName}" created from template "${template.name}"`);
+    } catch (error) {
+      console.error('Failed to create project from template:', error);
+      showError('Failed to create project from template');
+    }
+  }, [templateService, newProject, addCable, addLoad, addConduit, addTray, addIOPoint, showSuccess, showError]);
+
+  const handleCreateFromScratch = useCallback(async (projectName: string) => {
+    try {
+      console.log('Creating empty project:', projectName);
+      await newProject({ name: projectName });
+      setShowTemplateSelection(false);
+      showSuccess(`Empty project "${projectName}" created`);
+    } catch (error) {
+      console.error('Failed to create empty project:', error);
+      showError('Failed to create project');
+    }
+  }, [newProject, showSuccess, showError]);
+
+  const handleSaveAsTemplate = useCallback(async () => {
+    if (!project) {
+      showError('No project to save as template');
+      return;
+    }
+    
+    try {
+      // For now, just show a placeholder
+      const templateName = prompt('Enter template name:', `${project.name} Template`);
+      if (!templateName) return;
+      
+      const description = prompt('Enter template description (optional):');
+      
+      await templateService.createTemplateFromProject(
+        project,
+        { cables, ioPoints, loads, conduits, trays },
+        {
+          name: templateName,
+          description: description || undefined,
+          category: 'Custom',
+          includeData: true,
+          includeColumnPresets: false,
+        }
+      );
+      
+      showSuccess(`Template "${templateName}" saved successfully`);
+    } catch (error) {
+      console.error('Failed to save template:', error);
+      showError('Failed to save template');
+    }
+  }, [project, cables, ioPoints, loads, conduits, trays, templateService, showSuccess, showError]);
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'cables':
@@ -352,6 +888,8 @@ function App() {
         return (
           <CableTable
             cables={cables}
+            trays={trays}
+            conduits={conduits}
             onCableUpdate={updateCable}
             onCableDelete={deleteCable}
             onCableEdit={handleEditCable}
@@ -370,43 +908,72 @@ function App() {
         );
       case 'io':
         return (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <div className="text-center">
-              <div className="text-4xl mb-4">📡</div>
-              <div className="text-lg font-medium mb-2">I/O List</div>
-              <div className="text-sm">Coming soon...</div>
-            </div>
-          </div>
+          <IOTable
+            ioPoints={ioPoints}
+            plcCards={plcCards}
+            onIOPointUpdate={handleIOPointUpdate}
+            onIOPointDelete={deleteIOPoint}
+            onIOPointEdit={handleIOPointEdit}
+            onAddIOPoint={handleAddIOPoint}
+            onAddFromLibrary={handleAddFromLibrary}
+            onBulkEdit={handleIOBulkEdit}
+            selectedIOPoints={selectedIOPoints}
+            onSelectionChange={setSelectedIOPoints}
+          />
         );
       case 'conduits':
         return (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <div className="text-center">
-              <div className="text-4xl mb-4">🔧</div>
-              <div className="text-lg font-medium mb-2">Conduit Management</div>
-              <div className="text-sm">Coming soon...</div>
-            </div>
-          </div>
+          <ConduitTable
+            conduits={conduits}
+            onConduitUpdate={handleConduitUpdate}
+            onConduitDelete={handleConduitDelete}
+            onConduitEdit={handleConduitEdit}
+            onAddConduit={handleAddConduit}
+            onAddFromLibrary={handleAddFromLibrary}
+            onBulkEdit={handleConduitBulkEdit}
+            selectedConduits={selectedConduits}
+            onSelectionChange={setSelectedConduits}
+          />
         );
       case 'loads':
         return (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <div className="text-center">
-              <div className="text-4xl mb-4">⚡</div>
-              <div className="text-lg font-medium mb-2">Load Management</div>
-              <div className="text-sm">Coming soon...</div>
-            </div>
-          </div>
+          <LoadTable
+            loads={loads}
+            onLoadUpdate={handleLoadUpdate}
+            onLoadDelete={deleteLoad}
+            onLoadEdit={handleLoadEdit}
+            onAddLoad={handleAddLoad}
+            onAddFromLibrary={handleAddFromLibrary}
+            onBulkEdit={handleLoadBulkEdit}
+            selectedLoads={selectedLoads}
+            onSelectionChange={setSelectedLoads}
+          />
+        );
+      case 'trays':
+        return (
+          <TrayTable
+            trays={trays}
+            onTrayUpdate={handleTrayUpdate}
+            onTrayDelete={handleTrayDelete}
+            onTrayEdit={handleTrayEdit}
+            onAddTray={handleAddTray}
+            onAddFromLibrary={handleAddFromLibrary}
+            onBulkEdit={handleTrayBulkEdit}
+            selectedTrays={selectedTrays}
+            onSelectionChange={setSelectedTrays}
+          />
         );
       case 'reports':
         return (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            <div className="text-center">
-              <div className="text-4xl mb-4">📊</div>
-              <div className="text-lg font-medium mb-2">Reports & Export</div>
-              <div className="text-sm">Coming soon...</div>
-            </div>
-          </div>
+          <EngineeringDashboard
+            project={project}
+            cables={cables}
+            trays={trays}
+            conduits={conduits}
+            loads={loads}
+            ioPoints={ioPoints}
+            plcCards={plcCards}
+          />
         );
       default:
         return null;
@@ -450,9 +1017,10 @@ function App() {
   // Calculate project totals (for now using actual data, could come from database summary)
   const projectTotals = {
     cables: cables.length,
-    ioPoints: 0, // TODO: implement I/O points counting
-    conduits: 0, // TODO: implement conduit counting
-    loads: 0 // TODO: implement load counting
+    ioPoints: ioPoints.length,
+    conduits: conduits.length,
+    loads: loads.length,
+    trays: trays.length
   };
 
   return (
@@ -461,6 +1029,7 @@ function App() {
         appState={{ project, activeTab, isLoading, saveStatus, lastSaved }}
         onTabChange={handleTabChange}
         onExport={handleExport}
+        onMultiSheetExport={handleMultiSheetExport}
         onImport={handleImport}
         currentViewStats={currentViewStats}
         projectTotals={projectTotals}
@@ -468,6 +1037,13 @@ function App() {
         onFiltersChange={handleFiltersChange}
         onOpenAutoNumbering={handleOpenAutoNumbering}
         onOpenFindReplace={handleOpenFindReplace}
+        onShowRevisionHistory={handleShowRevisionHistory}
+        onCreateCheckpoint={handleCreateCheckpoint}
+        onNewProject={handleNewProject}
+        onSaveProject={handleSaveProject}
+        onSaveProjectAs={handleSaveProjectAs}
+        onOpenProject={handleOpenProject}
+        onSaveAsTemplate={handleSaveAsTemplate}
       >
         {renderTabContent()}
       </AppShell>
@@ -481,11 +1057,50 @@ function App() {
         isLoading={isLoading}
       />
 
+      <EditIOPointModal
+        isOpen={showEditIOPointModal}
+        onClose={handleCloseEditIOPointModal}
+        onUpdate={handleIOPointUpdate}
+        ioPoint={editingIOPoint}
+        cables={cables}
+        plcCards={plcCards}
+        isLoading={isLoading}
+      />
+
+      <EditLoadModal
+        isOpen={showEditLoadModal}
+        onClose={handleCloseEditLoadModal}
+        onUpdate={handleLoadUpdate}
+        load={editingLoad}
+        cables={cables}
+        isLoading={isLoading}
+      />
+
+      <EditConduitModal
+        isOpen={showEditConduitModal}
+        onClose={handleCloseEditConduitModal}
+        onUpdate={handleConduitUpdate}
+        conduit={editingConduit}
+        cables={cables}
+        isLoading={isLoading}
+      />
+
+      <EditTrayModal
+        isOpen={showEditTrayModal}
+        onClose={handleCloseEditTrayModal}
+        onUpdate={handleTrayUpdate}
+        tray={editingTray}
+        cables={cables}
+        isLoading={isLoading}
+      />
+
       <BulkEditModal
         isOpen={showBulkEditModal}
         onClose={handleCloseBulkEditModal}
         onUpdate={handleModalBulkUpdate}
         selectedCables={cables.filter(cable => cable.id && selectedCables.includes(cable.id))}
+        trays={trays}
+        conduits={conduits}
         isLoading={isLoading}
       />
 
@@ -495,6 +1110,7 @@ function App() {
         onAddFromLibrary={handleLibraryAddCable}
         isLoading={isLoading}
       />
+
 
       <AutoNumberingModal
         isOpen={showAutoNumberingModal}
@@ -524,6 +1140,71 @@ function App() {
         onImport={handleImportCables}
         columns={columnService.loadColumnSettings()}
         existingCables={cables}
+      />
+
+      <MultiSheetExportModal
+        isOpen={showMultiSheetExportModal}
+        onClose={handleCloseMultiSheetExport}
+        data={{
+          cables,
+          ioPoints,
+          loads,
+          conduits,
+          trays,
+          plcCards
+        }}
+        columnDefinitions={columnServiceAggregator.getExportColumnDefinitions()}
+      />
+
+      <BulkEditConduitModal
+        isOpen={showBulkEditConduitModal}
+        onClose={handleCloseBulkEditConduitModal}
+        onSave={handleBulkUpdateConduits}
+        selectedConduits={conduits.filter(conduit => conduit.id && selectedConduits.includes(conduit.id))}
+      />
+
+      <BulkEditTrayModal
+        isOpen={showBulkEditTrayModal}
+        onClose={handleCloseBulkEditTrayModal}
+        onSave={handleBulkUpdateTrays}
+        selectedTrays={trays.filter(tray => tray.id && selectedTrays.includes(tray.id))}
+      />
+
+      <BulkEditLoadModal
+        isOpen={showBulkEditLoadModal}
+        onClose={handleCloseBulkEditLoadModal}
+        onSave={handleBulkUpdateLoads}
+        selectedLoads={loads.filter(load => load.id && selectedLoads.includes(load.id))}
+      />
+
+      <BulkEditIOModal
+        isOpen={showBulkEditIOModal}
+        onClose={handleCloseBulkEditIOModal}
+        onSave={handleBulkUpdateIOPoints}
+        selectedIOPoints={ioPoints.filter(io => io.id && selectedIOPoints.includes(io.id))}
+      />
+
+      {/* Revision Control Components */}
+      <RevisionHistoryPanel
+        isOpen={showRevisionHistory}
+        onClose={handleCloseRevisionHistory}
+        onCompareRevisions={handleCompareRevisions}
+        onCreateCheckpoint={handleCreateCheckpoint}
+      />
+
+      <RevisionComparisonModal
+        isOpen={showRevisionComparison}
+        onClose={handleCloseRevisionComparison}
+        revisionA={comparisonRevisions.revisionA}
+        revisionB={comparisonRevisions.revisionB}
+      />
+
+      {/* Template System */}
+      <TemplateSelectionModal
+        isOpen={showTemplateSelection}
+        onClose={() => setShowTemplateSelection(false)}
+        onSelectTemplate={handleSelectTemplate}
+        onCreateFromScratch={handleCreateFromScratch}
       />
     </>
   );

@@ -1,0 +1,105 @@
+/* Icon sizing system for consistent UI */
+
+/* Small inline icons - for badges, inline text, micro interactions */
+.icon-xs {
+  @apply h-3 w-3;
+}
+
+/* Small icons - for secondary actions, table cells */
+.icon-sm {
+  @apply h-4 w-4;
+}
+
+/* Medium icons - for primary buttons, form elements */
+.icon-md {
+  @apply h-5 w-5;
+}
+
+/* Large icons - for close buttons, prominent actions */
+.icon-lg {
+  @apply h-6 w-6;
+}
+
+/* Extra large icons - for primary CTAs, hero actions */
+.icon-xl {
+  @apply h-8 w-8;
+}
+
+/* Hero icons - for upload areas, empty states */
+.icon-hero {
+  @apply h-12 w-12;
+}
+
+/* Jumbo icons - for large empty states, splash screens */
+.icon-jumbo {
+  @apply h-16 w-16;
+}
+
+/* Icon colors for consistent theming */
+.icon-default {
+  @apply text-gray-600;
+}
+
+.icon-muted {
+  @apply text-gray-400;
+}
+
+.icon-primary {
+  @apply text-blue-600;
+}
+
+.icon-success {
+  @apply text-green-500;
+}
+
+.icon-warning {
+  @apply text-yellow-500;
+}
+
+.icon-danger {
+  @apply text-red-500;
+}
+
+.icon-info {
+  @apply text-blue-500;
+}
+
+/* Hover states */
+.icon-default:hover {
+  @apply text-gray-800;
+}
+
+.icon-muted:hover {
+  @apply text-gray-600;
+}
+
+.icon-primary:hover {
+  @apply text-blue-800;
+}
+
+/* Interactive icon states */
+.icon-interactive {
+  @apply transition-colors duration-200 cursor-pointer;
+}
+
+.icon-interactive:hover {
+  @apply opacity-80;
+}
+
+/* Icon positioning utilities */
+.icon-left {
+  @apply mr-2;
+}
+
+.icon-right {
+  @apply ml-2;
+}
+
+.icon-center {
+  @apply mx-auto;
+}
+
+/* Loading spinner for icons */
+.icon-spin {
+  @apply animate-spin;
+}

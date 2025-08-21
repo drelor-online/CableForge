@@ -1,3 +1,6 @@
+/* Import icon styles */
+@import './styles/icons.css';
+
 /* CableForge Custom CSS Variables (from our mockups) */
 :root {
   /* Typography */
