@@ -26,6 +26,9 @@ interface BulkUpdateData {
   partNumber?: string;
   outerDiameter?: number;
   notes?: string;
+  fromEquipment?: string;
+  toEquipment?: string;
+  length?: number;
 }
 
 interface FieldUpdateState {
@@ -44,6 +47,9 @@ interface FieldUpdateState {
   partNumber: boolean;
   outerDiameter: boolean;
   notes: boolean;
+  fromEquipment: boolean;
+  toEquipment: boolean;
+  length: boolean;
 }
 
 export const BulkEditModal: React.FC<BulkEditModalProps> = ({
@@ -71,7 +77,10 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
     manufacturer: false,
     partNumber: false,
     outerDiameter: false,
-    notes: false
+    notes: false,
+    fromEquipment: false,
+    toEquipment: false,
+    length: false
   });
   
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -95,7 +104,10 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
         manufacturer: false,
         partNumber: false,
         outerDiameter: false,
-        notes: false
+        notes: false,
+        fromEquipment: false,
+        toEquipment: false,
+        length: false
       });
       setErrors({});
     }
@@ -119,6 +131,10 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
 
     if (fieldsToUpdate.outerDiameter && updateData.outerDiameter && updateData.outerDiameter <= 0) {
       newErrors.outerDiameter = 'Outer diameter must be greater than 0';
+    }
+
+    if (fieldsToUpdate.length && updateData.length && updateData.length <= 0) {
+      newErrors.length = 'Cable length must be greater than 0';
     }
 
     setErrors(newErrors);
@@ -268,6 +284,79 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                 Check the fields you want to update, then set their new values. 
                 Only checked fields will be modified. Unchecked fields will remain unchanged.
               </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700">Quick Actions:</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const commonFields = ['description', 'function', 'voltage', 'route'];
+                  setFieldsToUpdate(prev => {
+                    const newState = { ...prev };
+                    commonFields.forEach(field => {
+                      newState[field as keyof FieldUpdateState] = true;
+                    });
+                    return newState;
+                  });
+                }}
+                className="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
+                disabled={isLoading}
+              >
+                Select Common Fields
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const physicalFields = ['cableType', 'size', 'cores', 'manufacturer', 'partNumber'];
+                  setFieldsToUpdate(prev => {
+                    const newState = { ...prev };
+                    physicalFields.forEach(field => {
+                      newState[field as keyof FieldUpdateState] = true;
+                    });
+                    return newState;
+                  });
+                }}
+                className="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 rounded hover:bg-green-200 transition-colors"
+                disabled={isLoading}
+              >
+                Select Physical Properties
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFieldsToUpdate({
+                    description: false,
+                    function: false,
+                    voltage: false,
+                    cableType: false,
+                    size: false,
+                    cores: false,
+                    fromLocation: false,
+                    toLocation: false,
+                    sparePercentage: false,
+                    route: false,
+                    segregationClass: false,
+                    manufacturer: false,
+                    partNumber: false,
+                    outerDiameter: false,
+                    notes: false,
+                    fromEquipment: false,
+                    toEquipment: false,
+                    length: false
+                  });
+                  setUpdateData({});
+                }}
+                className="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
+                disabled={isLoading}
+              >
+                Clear All
+              </button>
             </div>
           </div>
         </div>
@@ -432,6 +521,206 @@ export const BulkEditModal: React.FC<BulkEditModalProps> = ({
                 Current: {getUniqueValues('segregationClass').join(', ') || 'Various or empty'}
               </div>
             </div>
+
+            {/* From Equipment */}
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  checked={fieldsToUpdate.fromEquipment}
+                  onChange={() => handleFieldToggle('fromEquipment')}
+                  className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label className={labelClass}>From Equipment</label>
+              </div>
+              <input
+                type="text"
+                value={updateData.fromEquipment || ''}
+                onChange={e => handleInputChange('fromEquipment', e.target.value)}
+                className={fieldsToUpdate.fromEquipment ? inputClass : disabledInputClass}
+                placeholder="e.g., MCC-01, Panel A"
+                disabled={!fieldsToUpdate.fromEquipment || isLoading}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                Current: {getUniqueValues('fromEquipment').join(', ') || 'Various or empty'}
+              </div>
+            </div>
+
+            {/* To Equipment */}
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  checked={fieldsToUpdate.toEquipment}
+                  onChange={() => handleFieldToggle('toEquipment')}
+                  className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label className={labelClass}>To Equipment</label>
+              </div>
+              <input
+                type="text"
+                value={updateData.toEquipment || ''}
+                onChange={e => handleInputChange('toEquipment', e.target.value)}
+                className={fieldsToUpdate.toEquipment ? inputClass : disabledInputClass}
+                placeholder="e.g., Motor M-01, Light L-05"
+                disabled={!fieldsToUpdate.toEquipment || isLoading}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                Current: {getUniqueValues('toEquipment').join(', ') || 'Various or empty'}
+              </div>
+            </div>
+
+            {/* Size */}
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  checked={fieldsToUpdate.size}
+                  onChange={() => handleFieldToggle('size')}
+                  className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label className={labelClass}>Size</label>
+              </div>
+              <select
+                value={updateData.size || ''}
+                onChange={e => handleInputChange('size', e.target.value || undefined)}
+                className={fieldsToUpdate.size ? inputClass : disabledInputClass}
+                disabled={!fieldsToUpdate.size || isLoading}
+              >
+                <option value="">Select size...</option>
+                <option value="14 AWG">14 AWG</option>
+                <option value="12 AWG">12 AWG</option>
+                <option value="10 AWG">10 AWG</option>
+                <option value="8 AWG">8 AWG</option>
+                <option value="6 AWG">6 AWG</option>
+                <option value="4 AWG">4 AWG</option>
+                <option value="2 AWG">2 AWG</option>
+                <option value="1 AWG">1 AWG</option>
+                <option value="1/0 AWG">1/0 AWG</option>
+                <option value="2/0 AWG">2/0 AWG</option>
+                <option value="3/0 AWG">3/0 AWG</option>
+                <option value="4/0 AWG">4/0 AWG</option>
+                <option value="250 MCM">250 MCM</option>
+                <option value="300 MCM">300 MCM</option>
+                <option value="350 MCM">350 MCM</option>
+                <option value="400 MCM">400 MCM</option>
+                <option value="500 MCM">500 MCM</option>
+                <option value="600 MCM">600 MCM</option>
+                <option value="750 MCM">750 MCM</option>
+              </select>
+              <div className="text-xs text-gray-500 mt-1">
+                Current: {getUniqueValues('size').join(', ') || 'Various or empty'}
+              </div>
+            </div>
+
+            {/* Cores */}
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  checked={fieldsToUpdate.cores}
+                  onChange={() => handleFieldToggle('cores')}
+                  className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label className={labelClass}>Cores</label>
+              </div>
+              <input
+                type="number"
+                value={updateData.cores || ''}
+                onChange={e => handleInputChange('cores', e.target.value ? Number(e.target.value) : undefined)}
+                className={fieldsToUpdate.cores ? (errors.cores ? errorInputClass : inputClass) : disabledInputClass}
+                placeholder="e.g., 3"
+                min="1"
+                disabled={!fieldsToUpdate.cores || isLoading}
+              />
+              {errors.cores && <div className={errorClass}>{errors.cores}</div>}
+              <div className="text-xs text-gray-500 mt-1">
+                Current: {getUniqueValues('cores').join(', ') || 'Various or empty'}
+              </div>
+            </div>
+
+            {/* Length */}
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  checked={fieldsToUpdate.length}
+                  onChange={() => handleFieldToggle('length')}
+                  className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label className={labelClass}>Length (ft)</label>
+              </div>
+              <input
+                type="number"
+                value={updateData.length || ''}
+                onChange={e => handleInputChange('length', e.target.value ? Number(e.target.value) : undefined)}
+                className={fieldsToUpdate.length ? (errors.length ? errorInputClass : inputClass) : disabledInputClass}
+                placeholder="e.g., 150"
+                min="0"
+                step="0.1"
+                disabled={!fieldsToUpdate.length || isLoading}
+              />
+              {errors.length && <div className={errorClass}>{errors.length}</div>}
+              <div className="text-xs text-gray-500 mt-1">
+                Current: {getUniqueValues('length').join(', ') || 'Various or empty'}
+              </div>
+            </div>
+
+            {/* Manufacturer */}
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  checked={fieldsToUpdate.manufacturer}
+                  onChange={() => handleFieldToggle('manufacturer')}
+                  className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label className={labelClass}>Manufacturer</label>
+              </div>
+              <input
+                type="text"
+                value={updateData.manufacturer || ''}
+                onChange={e => handleInputChange('manufacturer', e.target.value)}
+                className={fieldsToUpdate.manufacturer ? inputClass : disabledInputClass}
+                placeholder="e.g., Southwire, General Cable"
+                disabled={!fieldsToUpdate.manufacturer || isLoading}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                Current: {getUniqueValues('manufacturer').join(', ') || 'Various or empty'}
+              </div>
+            </div>
+
+            {/* Part Number */}
+            <div>
+              <div className="flex items-center mb-2">
+                <input
+                  type="checkbox"
+                  checked={fieldsToUpdate.partNumber}
+                  onChange={() => handleFieldToggle('partNumber')}
+                  className="mr-2 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label className={labelClass}>Part Number</label>
+              </div>
+              <input
+                type="text"
+                value={updateData.partNumber || ''}
+                onChange={e => handleInputChange('partNumber', e.target.value)}
+                className={fieldsToUpdate.partNumber ? inputClass : disabledInputClass}
+                placeholder="e.g., TC12-3C-600V"
+                disabled={!fieldsToUpdate.partNumber || isLoading}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                Current: {getUniqueValues('partNumber').join(', ') || 'Various or empty'}
+              </div>
+            </div>
+
 
             {/* Notes */}
             <div className="lg:col-span-2">

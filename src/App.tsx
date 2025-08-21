@@ -5,6 +5,7 @@ import EditCableModal from './components/modals/EditCableModal';
 import BulkEditModal from './components/modals/BulkEditModal';
 import CableLibraryModal from './components/modals/CableLibraryModal';
 import AutoNumberingModal from './components/modals/AutoNumberingModal';
+import FindReplaceModal from './components/modals/FindReplaceModal';
 import { useAppStore } from './stores/useAppStore';
 import { useDatabaseStore } from './stores/useDatabaseStore';
 import { validationService } from './services/validation-service';
@@ -70,6 +71,7 @@ function App() {
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [showAutoNumberingModal, setShowAutoNumberingModal] = useState(false);
+  const [showFindReplaceModal, setShowFindReplaceModal] = useState(false);
 
   // Initialize database on mount
   useEffect(() => {
@@ -279,6 +281,39 @@ function App() {
     console.log('Auto-numbering settings saved:', settings);
   }, [showSuccess]);
 
+  const handleOpenFindReplace = useCallback(() => {
+    setShowFindReplaceModal(true);
+  }, []);
+
+  const handleCloseFindReplace = useCallback(() => {
+    setShowFindReplaceModal(false);
+  }, []);
+
+  const handleFindReplace = useCallback(async (updates: { cableId: number; field: string; newValue: string }[]) => {
+    console.log('handleFindReplace: Applying updates:', updates);
+    try {
+      // Group updates by cable ID
+      const updatesByCable = updates.reduce((acc, update) => {
+        if (!acc[update.cableId]) {
+          acc[update.cableId] = {};
+        }
+        (acc[update.cableId] as any)[update.field] = update.newValue;
+        return acc;
+      }, {} as Record<number, Partial<Cable>>);
+
+      // Apply updates
+      const promises = Object.entries(updatesByCable).map(([cableId, cableUpdates]) => 
+        updateCable(parseInt(cableId), cableUpdates)
+      );
+      
+      await Promise.all(promises);
+      showSuccess(`${updates.length} field${updates.length !== 1 ? 's' : ''} updated successfully!`);
+    } catch (error) {
+      console.error('handleFindReplace: Failed to apply updates:', error);
+      throw error;
+    }
+  }, [updateCable, showSuccess]);
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'cables':
@@ -400,6 +435,7 @@ function App() {
         validationCounts={validationCounts}
         onFiltersChange={handleFiltersChange}
         onOpenAutoNumbering={handleOpenAutoNumbering}
+        onOpenFindReplace={handleOpenFindReplace}
       >
         {renderTabContent()}
       </AppShell>
@@ -432,6 +468,14 @@ function App() {
         isOpen={showAutoNumberingModal}
         onClose={handleCloseAutoNumbering}
         onSave={handleSaveAutoNumbering}
+      />
+
+      <FindReplaceModal
+        isOpen={showFindReplaceModal}
+        onClose={handleCloseFindReplace}
+        onReplace={handleFindReplace}
+        cables={cables}
+        isLoading={isLoading}
       />
     </>
   );

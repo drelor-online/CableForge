@@ -10,6 +10,7 @@ import StatusIndicator from '../ui/StatusIndicator';
 import ValidationIndicator from '../ui/ValidationIndicator';
 import KebabMenu from '../ui/KebabMenu';
 import BulkActionsBar from './BulkActionsBar';
+import DuplicateCablesModal from '../modals/DuplicateCablesModal';
 import { useUI } from '../../contexts/UIContext';
 
 interface CableTableProps {
@@ -59,6 +60,9 @@ const CableTable: React.FC<CableTableProps> = ({
   
   // Empty row state for Excel-like editing
   const [isCreatingNewCable, setIsCreatingNewCable] = useState(false);
+  
+  // Duplicate modal state
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   // Apply filters using props
   useEffect(() => {
@@ -254,6 +258,42 @@ const CableTable: React.FC<CableTableProps> = ({
       }
     }
   }, [selectedCables, onCableDelete, showConfirm, showSuccess, showError]);
+
+  const handleBulkDuplicate = useCallback(() => {
+    if (selectedCables.length === 0) return;
+    setShowDuplicateModal(true);
+  }, [selectedCables.length]);
+
+  const handleDuplicateCables = useCallback(async (cablesToDuplicate: Cable[], count: number) => {
+    try {
+      const totalCopies = cablesToDuplicate.length * count;
+      const newTags = autoNumberingService.getNextTags(cables, totalCopies);
+      
+      let tagIndex = 0;
+      const promises = [];
+      
+      for (let i = 0; i < count; i++) {
+        for (const cable of cablesToDuplicate) {
+          const cableData: Partial<Cable> = {
+            ...cable,
+            id: undefined, // Remove ID so it creates a new cable
+            tag: newTags[tagIndex++],
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          
+          promises.push(onAddCable(cableData));
+        }
+      }
+      
+      await Promise.all(promises);
+      showSuccess(`${totalCopies} cable${totalCopies !== 1 ? 's' : ''} duplicated successfully!`);
+      setShowDuplicateModal(false);
+    } catch (error) {
+      console.error('Failed to duplicate cables:', error);
+      showError(`Failed to duplicate cables: ${error}`);
+    }
+  }, [cables, onAddCable, showSuccess, showError]);
 
   // Get validation status for a cable
   const getCableValidationStatus = useCallback((cableId?: number): ValidationStatus => {
@@ -569,7 +609,18 @@ const CableTable: React.FC<CableTableProps> = ({
         onBulkEdit={onBulkEdit}
         onBulkDelete={handleBulkDelete}
         onBulkExport={() => {}} // TODO: implement bulk export
+        onBulkDuplicate={handleBulkDuplicate}
         onClearSelection={() => onSelectionChange([])}
+        isLoading={false}
+      />
+
+      {/* Duplicate Cables Modal */}
+      <DuplicateCablesModal
+        isOpen={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+        onDuplicate={handleDuplicateCables}
+        selectedCables={cables.filter(cable => cable.id && selectedCables.includes(cable.id))}
+        allCables={cables}
         isLoading={false}
       />
     </div>

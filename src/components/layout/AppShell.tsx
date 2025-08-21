@@ -37,6 +37,8 @@ interface AppShellProps {
   }) => void;
   // Auto-numbering settings
   onOpenAutoNumbering?: () => void;
+  // Find & replace
+  onOpenFindReplace?: () => void;
 }
 
 const AppShell: React.FC<AppShellProps> = ({
@@ -48,7 +50,8 @@ const AppShell: React.FC<AppShellProps> = ({
   projectTotals,
   validationCounts,
   onFiltersChange,
-  onOpenAutoNumbering
+  onOpenAutoNumbering,
+  onOpenFindReplace
 }) => {
 
   // Filter state
@@ -98,6 +101,7 @@ const AppShell: React.FC<AppShellProps> = ({
         validationCounts={validationCounts}
         onExport={onExport}
         onOpenAutoNumbering={onOpenAutoNumbering}
+        onOpenFindReplace={onOpenFindReplace}
       />
       
       {/* Filter Bar - only show on cable tab for now */}

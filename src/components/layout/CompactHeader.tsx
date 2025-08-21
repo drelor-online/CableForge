@@ -11,6 +11,7 @@ interface CompactHeaderProps {
   };
   onExport: () => void;
   onOpenAutoNumbering?: () => void;
+  onOpenFindReplace?: () => void;
 }
 
 const CompactHeader: React.FC<CompactHeaderProps> = ({
@@ -18,7 +19,8 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
   onTabChange,
   validationCounts,
   onExport,
-  onOpenAutoNumbering
+  onOpenAutoNumbering,
+  onOpenFindReplace
 }) => {
   // Calculate overall integrity percentage
   const calculateIntegrityPercentage = () => {
@@ -78,6 +80,15 @@ const CompactHeader: React.FC<CompactHeaderProps> = ({
 
         {/* Action Buttons */}
         <div className="flex gap-2">
+          {onOpenFindReplace && activeTab === 'cables' && (
+            <button
+              onClick={onOpenFindReplace}
+              className="px-2 py-1 text-xs font-medium bg-white/10 text-white border border-white/20 rounded hover:bg-white/20 transition-colors"
+              title="Find & Replace"
+            >
+              🔍
+            </button>
+          )}
           {onOpenAutoNumbering && activeTab === 'cables' && (
             <button
               onClick={onOpenAutoNumbering}
