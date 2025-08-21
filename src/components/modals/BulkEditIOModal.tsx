@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { IOPoint } from '../../types';
+import { useToast } from '../common/ToastContainer';
 
 interface BulkEditIOModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
 }) => {
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [formData, setFormData] = useState<Partial<IOPoint>>({});
+  const { showWarning } = useToast();
 
   const handleFieldToggle = useCallback((field: string) => {
     setSelectedFields(prev => 
@@ -25,8 +27,8 @@ const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
     );
   }, []);
 
-  const handleInputChange = useCallback((field: keyof IOPoint, value: any) => {
-    setFormData((prev: any) => ({ ...prev, [field]: value }));
+  const handleInputChange = useCallback((field: keyof IOPoint, value: string | number | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (!selectedFields.includes(field as string)) {
       setSelectedFields(prev => [...prev, field as string]);
     }
@@ -34,7 +36,7 @@ const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
 
   const handleSave = useCallback(() => {
     if (selectedFields.length === 0) {
-      alert('Please select at least one field to update.');
+      showWarning('Please select at least one field to update.');
       return;
     }
     
@@ -42,7 +44,7 @@ const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
     onClose();
     setSelectedFields([]);
     setFormData({});
-  }, [formData, selectedFields, onSave, onClose]);
+  }, [formData, selectedFields, onSave, onClose, showWarning]);
 
   const handleQuickAction = useCallback((action: string) => {
     switch (action) {
@@ -54,7 +56,7 @@ const BulkEditIOModal: React.FC<BulkEditIOModalProps> = ({
       case 'increment-point':
         const maxPoint = Math.max(...selectedIOPoints.map(io => parseInt(io.plcPoint || '0') || 0));
         setSelectedFields(prev => [...prev.filter(f => f !== 'plcPoint'), 'plcPoint']);
-        setFormData((prev: any) => ({ ...prev, plcPoint: (maxPoint + 1).toString() }));
+        setFormData((prev) => ({ ...prev, plcPoint: (maxPoint + 1).toString() }));
         break;
       case 'reset-tag':
         handleInputChange('tag', '');

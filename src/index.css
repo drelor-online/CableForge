@@ -1,19 +1,20 @@
 /* Import icon styles */
 @import './styles/icons.css';
 
-/* CableForge Custom CSS Variables (from our mockups) */
+/* CableForge Design System CSS Variables */
 :root {
   /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, 'Courier New', monospace;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
   /* Colors - Professional Engineering Theme */
-  --color-primary: #1e40af;
+  --color-primary: #2563eb;
   --color-primary-hover: #1d4ed8;
   --color-primary-light: #dbeafe;
 
-  --color-success: #059669;
-  --color-success-light: #d1fae5;
+  --color-success: #16a34a;
+  --color-success-light: #dcfce7;
 
   --color-warning: #d97706;
   --color-warning-light: #fef3c7;
@@ -21,30 +22,112 @@
   --color-error: #dc2626;
   --color-error-light: #fee2e2;
 
+  --color-info: #0284c7;
+  --color-info-light: #bae6fd;
+
   /* Cable Type Colors */
   --cable-power: #dc2626;
   --cable-signal: #2563eb;
   --cable-control: #059669;
-  --cable-spare: #9ca3af;
-  --cable-is: #7c3aed;
+  --cable-instrumentation: #7c3aed;
+  --cable-communication: #ea580c;
+  --cable-spare: #64748b;
+  --cable-fiber: #0891b2;
+  --cable-coax: #9333ea;
 
-  /* AG-Grid Theme Variables - Compact Design */
-  --ag-header-height: 28px;
-  --ag-header-background-color: #f8fafc;
-  --ag-header-foreground-color: #475569;
-  --ag-border-color: #f1f5f9;
-  --ag-row-height: 28px;
-  --ag-list-item-height: 24px;
-  --ag-cell-horizontal-padding: 8px;
-  
+  /* Status Colors */
+  --status-online: #10b981;
+  --status-offline: #ef4444;
+  --status-warning: #f59e0b;
+  --status-maintenance: #8b5cf6;
+  --status-unknown: #6b7280;
+
+  /* Validation Colors */
+  --validation-valid: #10b981;
+  --validation-warning: #f59e0b;
+  --validation-error: #ef4444;
+  --validation-info: #3b82f6;
+
+  /* Background Colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --bg-tertiary: #f3f4f6;
+  --bg-overlay: rgba(0, 0, 0, 0.5);
+  --bg-glass: rgba(255, 255, 255, 0.8);
+
+  /* Text Colors */
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-tertiary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-inverse: #ffffff;
+  --text-link: #2563eb;
+  --text-link-hover: #1d4ed8;
+
+  /* Border Colors */
+  --border-light: #f3f4f6;
+  --border-medium: #e5e7eb;
+  --border-dark: #d1d5db;
+  --border-focus: #3b82f6;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;    /* 4px */
+  --spacing-sm: 0.5rem;     /* 8px */
+  --spacing-md: 0.75rem;    /* 12px */
+  --spacing-lg: 1rem;       /* 16px */
+  --spacing-xl: 1.5rem;     /* 24px */
+  --spacing-2xl: 2rem;      /* 32px */
+  --spacing-3xl: 3rem;      /* 48px */
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-base: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* Border Radius */
+  --radius-sm: 0.125rem;    /* 2px */
+  --radius-base: 0.25rem;   /* 4px */
+  --radius-md: 0.375rem;    /* 6px */
+  --radius-lg: 0.5rem;      /* 8px */
+  --radius-xl: 0.75rem;     /* 12px */
+
+  /* Transitions */
+  --transition-colors: color 150ms cubic-bezier(0.4, 0, 0.2, 1), background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-opacity: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-shadow: box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-transform: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Z-Index */
+  --z-dropdown: 1000;
+  --z-sticky: 1100;
+  --z-overlay: 1300;
+  --z-modal: 1400;
+  --z-toast: 1700;
+  --z-tooltip: 1800;
+
   /* Compact Header Colors */
-  --header-bg: #2c3e50;
+  --header-bg: #334155;
   --header-text: #ffffff;
   --header-text-muted: rgba(255, 255, 255, 0.6);
   
   /* Filter Bar Colors */
-  --filter-bar-bg: #f1f3f4;
-  --filter-bar-border: #e0e0e0;
+  --filter-bar-bg: #f8fafc;
+  --filter-bar-border: #e2e8f0;
+
+  /* AG-Grid Theme Variables - Compact Design */
+  --ag-header-height: 32px;
+  --ag-header-background-color: var(--bg-secondary);
+  --ag-header-foreground-color: var(--text-secondary);
+  --ag-border-color: var(--border-light);
+  --ag-row-height: 32px;
+  --ag-list-item-height: 28px;
+  --ag-cell-horizontal-padding: 12px;
+  --ag-row-hover-color: var(--bg-secondary);
+  --ag-selected-row-background-color: var(--color-primary-light);
+  --ag-odd-row-background-color: var(--bg-primary);
+  --ag-even-row-background-color: var(--bg-secondary);
 }
 
 body {

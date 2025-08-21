@@ -2,6 +2,8 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Cable } from '../../types';
 import { ColumnDefinition } from '../../services/column-service';
 import { ImportOptions, ImportValidationResult, ParsedCsvData, importService } from '../../services/import-service';
+import { useAsyncOperation } from '../../hooks/useAsyncOperation';
+import { useToast } from '../common/ToastContainer';
 import { 
   X,
   Upload,
@@ -9,7 +11,8 @@ import {
   CheckCircle,
   AlertTriangle,
   Info,
-  Check
+  Check,
+  Loader2
 } from 'lucide-react';
 
 interface ImportWizardModalProps {
@@ -41,32 +44,54 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     overwriteExisting: false
   });
   const [validationResult, setValidationResult] = useState<ImportValidationResult | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  
+  const { showSuccess, showError } = useToast();
+  
+  // Async operations for file parsing
+  const fileParser = useAsyncOperation(async (file: File) => {
+    const parsed = await importService.parseFile(file);
+    setParsedData(parsed);
+    
+    // Auto-detect format
+    const format = file.name.endsWith('.csv') ? 'csv' : 'xlsx';
+    setImportOptions(prev => ({ ...prev, format }));
+    
+    // Auto-suggest column mapping
+    const suggestedMapping = importService.suggestFieldMapping(parsed.headers, columns);
+    setImportOptions(prev => ({ ...prev, columnMapping: suggestedMapping }));
+    
+    setCurrentStep('configure');
+    return parsed;
+  });
+  
+  // Async operations for data validation
+  const dataValidator = useAsyncOperation(async () => {
+    if (!parsedData) throw new Error('No parsed data available');
+    
+    const result = importService.validateAndConvertData(
+      parsedData,
+      importOptions,
+      columns,
+      existingCables
+    );
+    setValidationResult(result);
+    setCurrentStep('validate');
+    return result;
+  });
+  
+  // Async operations for import
+  const dataImporter = useAsyncOperation(async () => {
+    if (!validationResult?.parsedData) throw new Error('No validation result available');
+    
+    await onImport(validationResult.parsedData);
+    showSuccess('Data imported successfully');
+    handleClose();
+  });
 
   const handleFileSelect = useCallback(async (file: File) => {
     setSelectedFile(file);
-    setIsProcessing(true);
-    
-    try {
-      const parsed = await importService.parseFile(file);
-      setParsedData(parsed);
-      
-      // Auto-detect format
-      const format = file.name.endsWith('.csv') ? 'csv' : 'xlsx';
-      setImportOptions(prev => ({ ...prev, format }));
-      
-      // Auto-suggest column mapping
-      const suggestedMapping = importService.suggestFieldMapping(parsed.headers, columns);
-      setImportOptions(prev => ({ ...prev, columnMapping: suggestedMapping }));
-      
-      setCurrentStep('configure');
-    } catch (error) {
-      console.error('Failed to parse file:', error);
-      alert(`Failed to parse file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [columns]);
+    await fileParser.execute(file);
+  }, [fileParser.execute]);
 
   const handleConfigureNext = useCallback(() => {
     if (parsedData) {
@@ -74,26 +99,9 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
     }
   }, [parsedData]);
 
-  const handleMapNext = useCallback(() => {
-    if (parsedData) {
-      setIsProcessing(true);
-      try {
-        const result = importService.validateAndConvertData(
-          parsedData,
-          importOptions,
-          columns,
-          existingCables
-        );
-        setValidationResult(result);
-        setCurrentStep('validate');
-      } catch (error) {
-        console.error('Validation failed:', error);
-        alert(`Validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      } finally {
-        setIsProcessing(false);
-      }
-    }
-  }, [parsedData, importOptions, columns, existingCables]);
+  const handleMapNext = useCallback(async () => {
+    await dataValidator.execute();
+  }, [dataValidator.execute]);
 
   const handleValidateNext = useCallback(() => {
     if (validationResult?.isValid || (validationResult?.validRows && validationResult.validRows > 0)) {
@@ -102,19 +110,8 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
   }, [validationResult]);
 
   const handleImport = useCallback(async () => {
-    if (validationResult?.parsedData) {
-      setIsProcessing(true);
-      try {
-        await onImport(validationResult.parsedData);
-        handleClose();
-      } catch (error) {
-        console.error('Import failed:', error);
-        alert(`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      } finally {
-        setIsProcessing(false);
-      }
-    }
-  }, [validationResult, onImport]);
+    await dataImporter.execute();
+  }, [dataImporter.execute]);
 
   const handleClose = useCallback(() => {
     setCurrentStep('upload');
@@ -189,11 +186,24 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
             </div>
 
             {selectedFile && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className={`border rounded-lg p-4 ${
+                fileParser.loading 
+                  ? 'bg-blue-50 border-blue-200' 
+                  : 'bg-green-50 border-green-200'
+              }`}>
                 <div className="flex items-center">
-                  <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                  <span className="text-green-800 font-medium">{selectedFile.name}</span>
-                  <span className="text-green-600 ml-2">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+                  {fileParser.loading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 text-blue-600 mr-2 animate-spin" />
+                      <span className="text-blue-800 font-medium">Processing {selectedFile.name}...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                      <span className="text-green-800 font-medium">{selectedFile.name}</span>
+                      <span className="text-green-600 ml-2">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -532,10 +542,11 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
             </button>
             <button
               onClick={handleMapNext}
-              disabled={!canProceedFromMapping || isProcessing}
-              className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!canProceedFromMapping || dataValidator.loading}
+              className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
-              {isProcessing ? 'Validating...' : 'Next: Validate'}
+              {dataValidator.loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {dataValidator.loading ? 'Validating...' : 'Next: Validate'}
             </button>
           </div>
         );
@@ -577,10 +588,11 @@ const ImportWizardModal: React.FC<ImportWizardModalProps> = ({
               </button>
               <button
                 onClick={handleImport}
-                disabled={isProcessing}
-                className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={dataImporter.loading}
+                className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               >
-                {isProcessing ? 'Importing...' : `Import ${validationResult?.validRows} Cables`}
+                {dataImporter.loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {dataImporter.loading ? 'Importing...' : `Import ${validationResult?.validRows || 0} Cables`}
               </button>
             </div>
           </div>

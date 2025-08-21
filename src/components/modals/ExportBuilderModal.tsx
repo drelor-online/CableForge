@@ -2,11 +2,15 @@ import React, { useState, useMemo } from 'react';
 import { Cable } from '../../types';
 import { ColumnDefinition } from '../../services/column-service';
 import { ExportOptions, ExportPreset, exportService } from '../../services/export-service';
+import { useColumnSelection } from '../../hooks/useSelectableList';
+import { useAsyncOperation } from '../../hooks/useAsyncOperation';
+import { useToast } from '../common/ToastContainer';
 import { 
   X,
   FileText,
   CheckCircle2,
-  Download
+  Download,
+  Loader2
 } from 'lucide-react';
 
 interface ExportBuilderModalProps {
@@ -27,55 +31,55 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
   const [format, setFormat] = useState<'xlsx' | 'csv'>('xlsx');
   const [filename, setFilename] = useState('');
   const [includeHidden, setIncludeHidden] = useState(false);
-  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [exportScope, setExportScope] = useState<'all' | 'visible' | 'selected'>('visible');
   const [sheetName, setSheetName] = useState('Cables');
   const [showPresets, setShowPresets] = useState(false);
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
 
+  const { showSuccess, showError } = useToast();
   const exportPresets = exportService.getExportPresets();
 
-  // Get available columns based on visibility settings
-  const availableColumns = useMemo(() => {
-    return includeHidden ? columns : columns.filter(col => col.visible);
-  }, [columns, includeHidden]);
-
-  // Initialize selected columns when visibility changes
-  React.useEffect(() => {
-    if (selectedColumns.length === 0) {
-      setSelectedColumns(availableColumns.map(col => col.field));
+  // Use column selection hook
+  const columnSelection = useColumnSelection(
+    includeHidden ? columns : columns.filter(col => col.visible !== false),
+    {
+      onChange: (visible) => {
+        // Column selection change handled by hook
+      }
     }
-  }, [availableColumns]);
+  );
+
+  // Async operation for export
+  const exportOperation = useAsyncOperation(async (options: ExportOptions) => {
+    await exportService.exportData(data, columns, options);
+    showSuccess(`Successfully exported ${data.length} cables`);
+    onClose();
+  });
 
   const handleColumnToggle = (field: string) => {
-    setSelectedColumns(prev => 
-      prev.includes(field) 
-        ? prev.filter(f => f !== field)
-        : [...prev, field]
-    );
+    columnSelection.toggleItem(field);
   };
 
   const handleSelectAllColumns = () => {
-    setSelectedColumns(availableColumns.map(col => col.field));
+    columnSelection.selectAll();
   };
 
   const handleDeselectAllColumns = () => {
-    setSelectedColumns([]);
+    columnSelection.selectNone();
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     const exportOptions: ExportOptions = {
       format,
       filename: filename.trim() || undefined,
       includeHidden,
-      selectedColumns: selectedColumns.length > 0 ? selectedColumns : undefined,
+      selectedColumns: columnSelection.getSelectedKeys(),
       selectedRows: exportScope === 'selected' ? selectedRowIds : undefined,
       sheetName: format === 'xlsx' ? sheetName : undefined
     };
 
-    exportService.exportData(data, columns, exportOptions);
-    onClose();
+    await exportOperation.execute(exportOptions);
   };
 
   const handleQuickExport = (type: 'all' | 'selected' | 'csv') => {
@@ -101,7 +105,7 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
     const exportOptions: ExportOptions = {
       format,
       includeHidden,
-      selectedColumns: selectedColumns.length > 0 ? selectedColumns : undefined,
+      selectedColumns: columnSelection.getSelectedKeys(),
       sheetName: format === 'xlsx' ? sheetName : undefined
     };
 
@@ -120,7 +124,7 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
     const options = preset.options;
     setFormat(options.format);
     setIncludeHidden(options.includeHidden || false);
-    setSelectedColumns(options.selectedColumns || availableColumns.map(col => col.field));
+    columnSelection.setSelection(options.selectedColumns || columnSelection.availableColumns.map(col => col.field));
     setSheetName(options.sheetName || 'Cables');
   };
 
@@ -364,11 +368,11 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
 
                 <div className="max-h-48 overflow-y-auto border border-gray-200 rounded p-3 bg-gray-50">
                   <div className="grid grid-cols-2 gap-2">
-                    {availableColumns.map(column => (
+                    {columnSelection.availableColumns.map(column => (
                       <label key={column.field} className="flex items-center text-sm">
                         <input
                           type="checkbox"
-                          checked={selectedColumns.includes(column.field)}
+                          checked={column.selected}
                           onChange={() => handleColumnToggle(column.field)}
                           className="mr-2"
                         />
@@ -379,7 +383,7 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
                 </div>
                 
                 <div className="text-sm text-gray-500 mt-2">
-                  {selectedColumns.length} of {availableColumns.length} columns selected
+                  {columnSelection.selectedCount} of {columnSelection.totalCount} columns selected
                 </div>
               </div>
 
@@ -426,10 +430,10 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
           </button>
           <button
             onClick={handleExport}
-            disabled={selectedColumns.length === 0}
+            disabled={columnSelection.selectedCount === 0}
             className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Export ({selectedColumns.length} columns)
+            Export ({columnSelection.selectedCount} columns)
           </button>
         </div>
       </div>

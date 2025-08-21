@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { ToastContainer } from './components/common/ToastContainer';
 import AppShell from './components/layout/AppShell';
 import CableTable from './components/tables/CableTable';
 import IOTable from './components/tables/IOTable';
@@ -1268,8 +1270,9 @@ function App() {
   };
 
   return (
-    <>
-      <AppShell
+    <ErrorBoundary showDetails={process.env.NODE_ENV === 'development'}>
+      <>
+        <AppShell
         appState={{ project, activeTab, isLoading, saveStatus, lastSaved }}
         onTabChange={handleTabChange}
         onExport={handleExport}
@@ -1453,7 +1456,11 @@ function App() {
         onSelectTemplate={handleSelectTemplate}
         onCreateFromScratch={handleCreateFromScratch}
       />
+      
+      {/* Toast Notifications */}
+      <ToastContainer />
     </>
+    </ErrorBoundary>
   );
 }
 
