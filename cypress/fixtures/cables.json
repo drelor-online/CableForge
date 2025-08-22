@@ -1,0 +1,132 @@
+{
+  "valid": [
+    {
+      "id": 1,
+      "tag": "CBL-001",
+      "description": "Main Power Feed - MCC to Panel A",
+      "voltage": 480,
+      "function": "Power",
+      "cableType": "XLPE",
+      "size": "500MCM",
+      "cores": 3,
+      "fromLocation": "MCC-1",
+      "toLocation": "PANEL-A",
+      "length": 150.5,
+      "route": "Direct",
+      "segregationClass": "LV",
+      "sparePercentage": 20,
+      "loadPercentage": 85
+    },
+    {
+      "id": 2,
+      "tag": "CBL-002",
+      "description": "Control Cable - PLC to Field Device",
+      "voltage": 24,
+      "function": "Control",
+      "cableType": "PVC",
+      "size": "16AWG",
+      "cores": 8,
+      "fromLocation": "PLC-RACK-01",
+      "toLocation": "VALVE-01",
+      "length": 85.2,
+      "route": "Cable Tray",
+      "segregationClass": "ELV",
+      "sparePercentage": 25,
+      "loadPercentage": 60
+    },
+    {
+      "id": 3,
+      "tag": "CBL-003",
+      "description": "Instrumentation Cable - Transmitter Signal",
+      "voltage": 24,
+      "function": "Instrumentation",
+      "cableType": "Instrumentation",
+      "size": "18AWG",
+      "cores": 2,
+      "fromLocation": "AI-MODULE-01",
+      "toLocation": "PT-001",
+      "length": 45.8,
+      "route": "Cable Tray",
+      "segregationClass": "ELV",
+      "sparePercentage": 30,
+      "loadPercentage": 40
+    },
+    {
+      "id": 4,
+      "tag": "CBL-004",
+      "description": "Motor Power Cable - VFD to Motor",
+      "voltage": 480,
+      "function": "Power",
+      "cableType": "VFD",
+      "size": "4/0AWG",
+      "cores": 3,
+      "fromLocation": "VFD-001",
+      "toLocation": "MOTOR-001",
+      "length": 25.0,
+      "route": "Conduit",
+      "segregationClass": "LV",
+      "sparePercentage": 10,
+      "loadPercentage": 90
+    },
+    {
+      "id": 5,
+      "tag": "CBL-005",
+      "description": "Ethernet Cable - HMI to Switch",
+      "voltage": 0,
+      "function": "Communication",
+      "cableType": "Cat6",
+      "size": "Cat6",
+      "cores": 8,
+      "fromLocation": "HMI-001",
+      "toLocation": "SWITCH-001",
+      "length": 12.5,
+      "route": "Cable Tray",
+      "segregationClass": "ELV",
+      "sparePercentage": 50,
+      "loadPercentage": 30
+    }
+  ],
+  "invalid": [
+    {
+      "tag": "",
+      "description": "Missing tag should fail validation",
+      "voltage": 480
+    },
+    {
+      "tag": "CBL-INVALID",
+      "description": "Invalid voltage range",
+      "voltage": -100
+    },
+    {
+      "tag": "CBL-DUPLICATE",
+      "description": "Duplicate tag test",
+      "voltage": 480
+    }
+  ],
+  "bulk_edit_test": [
+    {
+      "id": 10,
+      "tag": "CBL-010",
+      "description": "Bulk Edit Test Cable 1",
+      "voltage": 240,
+      "function": "Power",
+      "cableType": "PVC"
+    },
+    {
+      "id": 11,
+      "tag": "CBL-011",
+      "description": "Bulk Edit Test Cable 2",
+      "voltage": 240,
+      "function": "Power",
+      "cableType": "PVC"
+    },
+    {
+      "id": 12,
+      "tag": "CBL-012",
+      "description": "Bulk Edit Test Cable 3",
+      "voltage": 240,
+      "function": "Power",
+      "cableType": "PVC"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+tag,description,voltage,function,cableType,size,cores,fromLocation,toLocation,length
+CBL-VALID,Valid Test Cable,480,Power,XLPE,500MCM,3,MCC-1,PANEL-A,100.5
+,Missing Tag Cable,240,Control,PVC,16AWG,4,PLC-01,VALVE-01,50.0
+CBL-INVALID-VOLTAGE,Invalid Voltage Cable,-100,Power,XLPE,4/0AWG,3,VFD-01,MOTOR-01,25.0
+CBL-DUPLICATE,Duplicate Tag,480,Power,XLPE,500MCM,3,MCC-2,PANEL-B,75.0
