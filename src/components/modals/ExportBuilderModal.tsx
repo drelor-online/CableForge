@@ -5,14 +5,14 @@ import { ExportOptions, ExportPreset, exportService } from '../../services/expor
 import { useColumnSelection } from '../../hooks/useSelectableList';
 import { useAsyncOperation } from '../../hooks/useAsyncOperation';
 import { useToast } from '../common/ToastContainer';
-import { colors, spacing, typography } from '../../theme';
 import { 
-  X,
   FileText,
   CheckCircle2,
   Download,
   Loader2
 } from 'lucide-react';
+import Modal, { ModalFooter } from '../ui/Modal';
+import Button from '../ui/Button';
 
 interface ExportBuilderModalProps {
   isOpen: boolean;
@@ -57,6 +57,8 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
     showSuccess(`Successfully exported ${data.length} cables`);
     onClose();
   });
+
+  const isExporting = exportOperation.loading;
 
   const handleColumnToggle = (field: string) => {
     columnSelection.toggleItem(field);
@@ -147,69 +149,37 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Export Builder"
+      size="xl"
+      footer={
+        <ModalFooter
+          onCancel={onClose}
+          onConfirm={columnSelection.selectedCount > 0 && !isExporting ? handleExport : undefined}
+          cancelLabel="Cancel"
+          confirmLabel={isExporting ? "Exporting..." : `Export (${columnSelection.selectedCount} columns)`}
+          isLoading={isExporting}
+          additionalActions={
+            presetName.trim() && (
+              <Button
+                variant="secondary"
+                onClick={handleSavePreset}
+                disabled={isExporting}
+              >
+                Save Preset
+              </Button>
+            )
+          }
+        />
+      }
     >
-      <div 
-        className="w-full max-w-4xl max-h-[90vh] overflow-hidden"
-        style={{
-          backgroundColor: colors.white,
-          borderRadius: spacing[2],
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-        }}
-      >
-        {/* Header */}
-        <div 
-          className="flex items-center justify-between"
-          style={{
-            padding: spacing[6],
-            borderBottom: `1px solid ${colors.gray[200]}`
-          }}
-        >
-          <h2 
-            style={{
-              fontSize: typography.fontSize.xl,
-              fontWeight: typography.fontWeight.semibold,
-              color: colors.gray[900]
-            }}
-          >
-            Export Builder
-          </h2>
-          <button
-            onClick={onClose}
-            style={{
-              color: colors.gray[400],
-              border: 'none',
-              backgroundColor: 'transparent',
-              cursor: 'pointer',
-              padding: spacing[1],
-              borderRadius: spacing[1]
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.color = colors.gray[600]}
-            onMouseLeave={(e) => e.currentTarget.style.color = colors.gray[400]}
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
 
         <div className="flex h-[600px]">
           {/* Left Panel - Quick Actions */}
-          <div 
-            className="w-1/3"
-            style={{
-              padding: spacing[6],
-              borderRight: `1px solid ${colors.gray[200]}`,
-              backgroundColor: colors.gray[50]
-            }}
-          >
-            <h3 
-              style={{
-                fontWeight: typography.fontWeight.medium,
-                color: colors.gray[900],
-                marginBottom: spacing[4]
-              }}
-            >
+          <div className="w-1/3 p-6 border-r border-gray-200 bg-gray-50">
+            <h3 className="font-medium text-gray-900 mb-4">
               Quick Export
             </h3>
             
@@ -456,37 +426,12 @@ const ExportBuilderModal: React.FC<ExportBuilderModalProps> = ({
                     placeholder="Description (optional)"
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
-                  <button
-                    onClick={handleSavePreset}
-                    disabled={!presetName.trim()}
-                    className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Save Preset
-                  </button>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleExport}
-            disabled={columnSelection.selectedCount === 0}
-            className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Export ({columnSelection.selectedCount} columns)
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

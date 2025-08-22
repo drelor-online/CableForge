@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
+    "@tanstack/react-table": "^8.21.3",
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-dialog": "^2.3.3",
     "@tauri-apps/plugin-fs": "^2.4.2",
@@ -12,8 +13,6 @@
     "@testing-library/react": "^16.3.0",
     "@types/jest": "^27.5.2",
     "@types/node": "^16.18.126",
-    "ag-grid-community": "^34.1.1",
-    "ag-grid-react": "^34.1.1",
     "autoprefixer": "^10.4.21",
     "dexie": "^4.2.0",
     "lucide-react": "^0.540.0",
@@ -58,7 +57,7 @@
   },
   "jest": {
     "transformIgnorePatterns": [
-      "node_modules/(?!(@tauri-apps|ag-grid-community|ag-grid-react)/)"
+      "node_modules/(?!(@tauri-apps)/)"
     ],
     "moduleNameMapper": {
       "^@tauri-apps/api/(.*)$": "<rootDir>/src/__mocks__/tauri-api.ts"

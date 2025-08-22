@@ -241,33 +241,34 @@ export enum IOType {
 }
 
 export enum ConduitType {
+  RIGID_STEEL = 'RIGID_STEEL',
+  RIGID_ALUMINUM = 'RIGID_ALUMINUM',
   EMT = 'EMT',
-  RMC = 'RMC',
-  IMC = 'IMC',
   PVC = 'PVC',
-  LFNC = 'LFNC',
-  FMC = 'FMC',
-  RigidSteel = 'Rigid Steel',
-  CableRun = 'Cable Run',
-  CableLadder = 'Cable Ladder',
-  CableTray = 'Cable Tray'
+  FLEXIBLE = 'FLEXIBLE',
+  LIQUID_TIGHT = 'LIQUID_TIGHT'
+}
+
+export enum ConduitMaterial {
+  STEEL = 'STEEL',
+  ALUMINUM = 'ALUMINUM',
+  PVC = 'PVC',
+  STAINLESS_STEEL = 'STAINLESS_STEEL',
+  FIBERGLASS = 'FIBERGLASS'
 }
 
 export enum TrayType {
-  Ladder = 'Ladder',
-  Solid = 'Solid Bottom',
-  Ventilated = 'Ventilated Bottom',
-  WireMesh = 'Wire Mesh',
-  Channel = 'Channel',
-  Spine = 'Spine'
+  LADDER = 'LADDER',
+  SOLID_BOTTOM = 'SOLID_BOTTOM',
+  PERFORATED = 'PERFORATED',
+  WIRE_MESH = 'WIRE_MESH'
 }
 
 export enum TrayMaterial {
-  Aluminum = 'Aluminum',
-  Steel = 'Steel',
-  StainlessSteel = 'Stainless Steel',
-  Fiberglass = 'Fiberglass',
-  PVC = 'PVC'
+  STEEL = 'STEEL',
+  ALUMINUM = 'ALUMINUM',
+  STAINLESS_STEEL = 'STAINLESS_STEEL',
+  FRP = 'FRP'
 }
 
 export enum ConductorMaterial {

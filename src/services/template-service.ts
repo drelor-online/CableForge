@@ -331,10 +331,10 @@ class TemplateService {
             { tag: 'FAN-001', description: 'Cooling Fan', loadType: 'Motor', powerKw: 25, voltage: 480 },
           ],
           conduits: [
-            { tag: 'C-001', type: ConduitType.RigidSteel, size: '4"', maxFillPercentage: 40 },
+            { tag: 'C-001', type: ConduitType.RIGID_STEEL, size: '4"', maxFillPercentage: 40 },
           ],
           trays: [
-            { tag: 'T-001', type: TrayType.Ladder, width: 24, height: 4, maxFillPercentage: 50 },
+            { tag: 'T-001', type: TrayType.LADDER, width: 24, height: 4, maxFillPercentage: 50 },
           ],
           ioPoints: [],
         },

@@ -13,13 +13,16 @@ export enum ValidationType {
   DuplicateTag = 'DuplicateTag',
   SegregationViolation = 'SegregationViolation',
   RequiredField = 'RequiredField',
+  Required = 'Required',
   InvalidValue = 'InvalidValue',
-  NecCompliance = 'NecCompliance'
+  NecCompliance = 'NecCompliance',
+  Capacity = 'Capacity'
 }
 
 export interface ValidationResult {
-  cableId?: number;
-  cableTag: string;
+  entityId?: number;
+  cableId?: number; // Keep for backwards compatibility
+  cableTag: string; // This could be renamed to entityTag in future
   severity: ValidationSeverity;
   validationType: ValidationType;
   message: string;

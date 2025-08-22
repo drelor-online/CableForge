@@ -4,8 +4,8 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { ValidationResult, ValidationSummary, ValidationStatus } from '../types/validation';
-import { Cable } from '../types';
+import { ValidationResult, ValidationSummary, ValidationStatus, ValidationSeverity, ValidationType } from '../types/validation';
+import { Cable, IOPoint, Load, Tray, Conduit } from '../types';
 
 export class ValidationService {
   /**
@@ -75,8 +75,8 @@ export class ValidationService {
 
     try {
       const results = await this.validateCable(cable.id);
-      const errorCount = results.filter(r => r.severity === 'Error').length;
-      const warningCount = results.filter(r => r.severity === 'Warning').length;
+      const errorCount = results.filter(r => r.severity === ValidationSeverity.Error).length;
+      const warningCount = results.filter(r => r.severity === ValidationSeverity.Warning).length;
       
       return {
         hasIssues: errorCount > 0 || warningCount > 0,
@@ -92,7 +92,7 @@ export class ValidationService {
   /**
    * Filter validation results by severity
    */
-  filterBySeverity(results: ValidationResult[], severity: 'Error' | 'Warning' | 'Info'): ValidationResult[] {
+  filterBySeverity(results: ValidationResult[], severity: ValidationSeverity): ValidationResult[] {
     return results.filter(result => result.severity === severity);
   }
 
@@ -114,34 +114,6 @@ export class ValidationService {
   }
 
   /**
-   * Get validation icon for display in UI
-   */
-  getValidationIcon(status: ValidationStatus): string {
-    if (status.errorCount > 0) {
-      return '❌'; // Error
-    } else if (status.warningCount > 0) {
-      return '⚠️'; // Warning
-    } else if (status.hasIssues) {
-      return 'ℹ️'; // Info
-    }
-    return '✅'; // OK
-  }
-
-  /**
-   * Get validation message for tooltip
-   */
-  getValidationMessage(status: ValidationStatus): string {
-    if (status.errorCount > 0) {
-      return `${status.errorCount} error${status.errorCount !== 1 ? 's' : ''}`;
-    } else if (status.warningCount > 0) {
-      return `${status.warningCount} warning${status.warningCount !== 1 ? 's' : ''}`;
-    } else if (status.hasIssues) {
-      return 'Has validation issues';
-    }
-    return 'Validation passed';
-  }
-
-  /**
    * Get CSS class for validation status
    */
   getValidationClass(status: ValidationStatus): string {
@@ -153,6 +125,146 @@ export class ValidationService {
       return 'validation-info';
     }
     return 'validation-ok';
+  }
+
+  /**
+   * Get validation icon for status
+   */
+  getValidationIcon(status: ValidationStatus): string {
+    if (status.errorCount > 0) {
+      return '❌';
+    } else if (status.warningCount > 0) {
+      return '⚠️';
+    } else if (status.hasIssues) {
+      return 'ℹ️';
+    }
+    return '✅';
+  }
+
+  /**
+   * Get validation message for status
+   */
+  getValidationMessage(status: ValidationStatus): string {
+    if (status.errorCount > 0) {
+      return `${status.errorCount} error(s)${status.warningCount > 0 ? `, ${status.warningCount} warning(s)` : ''}`;
+    } else if (status.warningCount > 0) {
+      return `${status.warningCount} warning(s)`;
+    } else if (status.hasIssues) {
+      return 'Has validation issues';
+    }
+    return 'Validation passed';
+  }
+
+  /**
+   * Validate I/O points
+   */
+  async validateIOPoints(ioPoints: IOPoint[]): Promise<ValidationResult[]> {
+    // For now, return basic validation results
+    // This would typically interface with Rust validation engine
+    const results: ValidationResult[] = [];
+    
+    for (const ioPoint of ioPoints) {
+      if (!ioPoint.tag || ioPoint.tag.trim() === '') {
+        results.push({
+          cableTag: ioPoint.tag || 'Unnamed',
+          severity: ValidationSeverity.Error,
+          validationType: ValidationType.Required,
+          message: 'I/O Point tag is required',
+          field: 'tag',
+          overrideAllowed: false
+        });
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Validate loads
+   */
+  async validateLoads(loads: Load[]): Promise<ValidationResult[]> {
+    const results: ValidationResult[] = [];
+    
+    for (const load of loads) {
+      if (!load.tag || load.tag.trim() === '') {
+        results.push({
+          cableTag: load.tag || 'Unnamed',
+          severity: ValidationSeverity.Error,
+          validationType: ValidationType.Required,
+          message: 'Load tag is required',
+          field: 'tag',
+          overrideAllowed: false
+        });
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Validate trays
+   */
+  async validateTrays(trays: Tray[]): Promise<ValidationResult[]> {
+    const results: ValidationResult[] = [];
+    
+    for (const tray of trays) {
+      if (!tray.tag || tray.tag.trim() === '') {
+        results.push({
+          cableTag: tray.tag || 'Unnamed',
+          severity: ValidationSeverity.Error,
+          validationType: ValidationType.Required,
+          message: 'Tray tag is required',
+          field: 'tag',
+          overrideAllowed: false
+        });
+      }
+      
+      if (tray.fillPercentage > tray.maxFillPercentage) {
+        results.push({
+          cableTag: tray.tag,
+          severity: ValidationSeverity.Warning,
+          validationType: ValidationType.Capacity,
+          message: `Tray fill percentage (${tray.fillPercentage}%) exceeds maximum (${tray.maxFillPercentage}%)`,
+          field: 'fillPercentage',
+          overrideAllowed: true
+        });
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Validate conduits
+   */
+  async validateConduits(conduits: Conduit[]): Promise<ValidationResult[]> {
+    const results: ValidationResult[] = [];
+    
+    for (const conduit of conduits) {
+      if (!conduit.tag || conduit.tag.trim() === '') {
+        results.push({
+          cableTag: conduit.tag || 'Unnamed',
+          severity: ValidationSeverity.Error,
+          validationType: ValidationType.Required,
+          message: 'Conduit tag is required',
+          field: 'tag',
+          overrideAllowed: false
+        });
+      }
+      
+      if (conduit.fillPercentage > conduit.maxFillPercentage) {
+        results.push({
+          cableTag: conduit.tag,
+          severity: ValidationSeverity.Warning,
+          validationType: ValidationType.Capacity,
+          message: `Conduit fill percentage (${conduit.fillPercentage}%) exceeds maximum (${conduit.maxFillPercentage}%)`,
+          field: 'fillPercentage',
+          overrideAllowed: true
+        });
+      }
+    }
+    
+    return results;
   }
 }
 

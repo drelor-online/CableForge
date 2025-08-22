@@ -1,16 +1,39 @@
-import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
-import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridReadyEvent, CellValueChangedEvent, SelectionChangedEvent } from 'ag-grid-community';
-import { IOPoint, SignalType, IOType, PLCCard } from '../../types';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  ColumnDef,
+  Row,
+  Table as TanStackTable
+} from '@tanstack/react-table';
+import { IOPoint, PLCCard, SignalType, IOType } from '../../types';
+import { ValidationResult } from '../../types/validation';
+import { validationService } from '../../services/validation-service';
 import { revisionService } from '../../services/revision-service';
+import { useTableSelection } from '../../hooks/useTableSelection';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { 
+  copyToClipboard, 
+  parseClipboardData,
+  fillDown,
+  fillRight,
+  fillSeries,
+  clearContents 
+} from '../../utils/tanstack-helpers';
+import TableContextMenu from './TableContextMenu';
+import FilterBar from '../layout/FilterBar';
+import StatusIndicator from '../ui/StatusIndicator';
+import ValidationIndicator from '../ui/ValidationIndicator';
 import KebabMenu from '../ui/KebabMenu';
 import BulkActionsBar from './BulkActionsBar';
-// Toolbar removed - functionality moved to CompactHeader
-import PLCCardPanel from '../ui/PLCCardPanel';
-import { PLCAssignmentService } from '../../services/plc-assignment-service';
-import { useUI } from '../../contexts/UIContext';
-import { Filter, SortAsc, SortDesc, ChevronDown, Plus, Search, X, Edit2, Copy, Zap, Trash2 } from 'lucide-react';
-import ContextMenu, { useContextMenu, ContextMenuItem } from '../ui/ContextMenu';
+// import { useUI } from '../../contexts/UIContext';
+import { Edit2, Trash2, ChevronDown, Calculator, TrendingUp, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { ColumnDefinition, columnService } from '../../services/column-service';
+import { FilterCondition, filterService } from '../../services/filter-service';
+import '../../styles/tanstack-table.css';
 
 interface IOTableProps {
   ioPoints: IOPoint[];
@@ -25,6 +48,20 @@ interface IOTableProps {
   onSelectionChange: (selectedIds: number[]) => void;
 }
 
+interface EditingCell {
+  row: number;
+  column: string;
+}
+
+interface UndoAction {
+  action: 'update';
+  ioPointId: number;
+  field: string;
+  oldValue: any;
+  newValue: any;
+  timestamp: number;
+}
+
 const IOTable: React.FC<IOTableProps> = ({
   ioPoints,
   plcCards,
@@ -35,921 +72,807 @@ const IOTable: React.FC<IOTableProps> = ({
   onAddFromLibrary,
   onBulkEdit,
   selectedIOPoints,
-  onSelectionChange,
+  onSelectionChange
 }) => {
-  const { showConfirm, showSuccess, showError } = useUI();
-  
-  // Search and filter state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredIOPoints, setFilteredIOPoints] = useState<IOPoint[]>([]);
-  const [filters, setFilters] = useState({
-    ioType: '',
-    signalType: '',
-    plc: '',
-    assigned: ''
-  });
-  
-  // Refs for keyboard navigation
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [gridApi, setGridApi] = useState<any>(null);
-  const [isAddingNew, setIsAddingNew] = useState(false);
-  
-  // PLC card panel state
-  const [showPLCPanel, setShowPLCPanel] = useState(true);
+  // const { showContextMenu, hideContextMenu } = useUI();
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [columnFilters, setColumnFilters] = useState<FilterCondition[]>([]);
+  const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoAction[]>([]);
+  const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Context menu
-  const { contextMenu, showContextMenu, hideContextMenu } = useContextMenu();
-
-  // Filter I/O points based on search term and filters
+  // Validate IO points
   useEffect(() => {
-    let filtered = [...ioPoints];
-    
-    // Apply search term filter
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(ioPoint => {
-        return (
-          ioPoint.tag?.toLowerCase().includes(searchLower) ||
-          ioPoint.description?.toLowerCase().includes(searchLower) ||
-          ioPoint.plcName?.toLowerCase().includes(searchLower) ||
-          ioPoint.signalType?.toLowerCase().includes(searchLower) ||
-          ioPoint.ioType?.toLowerCase().includes(searchLower) ||
-          ioPoint.terminalBlock?.toLowerCase().includes(searchLower)
-        );
-      });
-    }
-
-    // Apply I/O type filter
-    if (filters.ioType) {
-      filtered = filtered.filter(ioPoint => ioPoint.ioType === filters.ioType);
-    }
-
-    // Apply signal type filter
-    if (filters.signalType) {
-      filtered = filtered.filter(ioPoint => ioPoint.signalType === filters.signalType);
-    }
-
-    // Apply PLC filter
-    if (filters.plc) {
-      filtered = filtered.filter(ioPoint => ioPoint.plcName === filters.plc);
-    }
-
-    // Apply assignment filter
-    if (filters.assigned) {
-      if (filters.assigned === 'assigned') {
-        filtered = filtered.filter(ioPoint => ioPoint.plcName && ioPoint.channel !== undefined);
-      } else if (filters.assigned === 'unassigned') {
-        filtered = filtered.filter(ioPoint => !ioPoint.plcName || ioPoint.channel === undefined);
-      }
-    }
-    
-    setFilteredIOPoints(filtered);
-  }, [ioPoints, searchTerm, filters]);
-
-  // Handle search input change
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchTerm(value);
-  }, []);
-
-  // Handle search clear
-  const handleSearchClear = useCallback(() => {
-    setSearchTerm('');
-  }, []);
-
-  // Handle filter changes
-  const handleFilterChange = useCallback((filterType: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterType]: value
-    }));
-  }, []);
-
-  // Clear all filters
-  const handleClearFilters = useCallback(() => {
-    setSearchTerm('');
-    setFilters({
-      ioType: '',
-      signalType: '',
-      plc: '',
-      assigned: ''
-    });
-  }, []);
-
-  // Get unique values for filter dropdowns
-  const getUniqueFilterValues = useCallback((field: keyof IOPoint): string[] => {
-    const values = ioPoints
-      .map(ioPoint => ioPoint[field])
-      .filter((value, index, arr) => value && arr.indexOf(value) === index)
-      .map(v => String(v))
-      .sort();
-    return values;
+    const validateIOPoints = async () => {
+      const results = await validationService.validateIOPoints(ioPoints);
+      setValidationResults(results);
+    };
+    validateIOPoints();
   }, [ioPoints]);
 
-  // Get unique PLC names
-  const getUniquePLCNames = useCallback((): string[] => {
-    const plcNames = new Set<string>();
-    ioPoints.forEach(ioPoint => {
-      if (ioPoint.plcName) plcNames.add(ioPoint.plcName);
-    });
-    plcCards.forEach(card => {
-      plcNames.add(card.plcName);
-    });
-    return Array.from(plcNames).sort();
-  }, [ioPoints, plcCards]);
-
-  const handleEdit = useCallback((ioPoint: IOPoint) => {
-    if (onIOPointEdit) {
-      onIOPointEdit(ioPoint);
-    } else {
-      console.log('Edit I/O point:', ioPoint.tag, '(no handler provided)');
-    }
-  }, [onIOPointEdit]);
-
-  const handleDelete = useCallback(async (ioPoint: IOPoint) => {
-    const confirmed = await showConfirm({
-      title: 'Delete I/O Point',
-      message: `Are you sure you want to delete I/O point ${ioPoint.tag}? This action cannot be undone.`,
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
-      type: 'danger'
-    });
-
-    if (confirmed) {
-      try {
-        onIOPointDelete(ioPoint.id!);
-        showSuccess(`I/O point ${ioPoint.tag} deleted successfully`);
-      } catch (error) {
-        showError(`Failed to delete I/O point ${ioPoint.tag}: ${error}`);
-      }
-    }
-  }, [onIOPointDelete, showConfirm, showSuccess, showError]);
-
-  // Get PLC card utilization for a specific card
-  const getPLCCardUtilization = useCallback((plcName: string, rack: number, slot: number) => {
-    const card = plcCards.find(c => c.plcName === plcName && c.rack === rack && c.slot === slot);
-    if (!card) return null;
-    
-    const usedChannels = ioPoints.filter(io => 
-      io.plcName === plcName && io.rack === rack && io.slot === slot && io.channel !== undefined
-    ).length;
-    
-    return {
-      used: usedChannels,
-      total: card.totalChannels,
-      percentage: Math.round((usedChannels / card.totalChannels) * 100)
-    };
-  }, [plcCards, ioPoints]);
-
-  // Column definitions for I/O table
-  const columnDefs: ColDef[] = useMemo(() => [
+  // Define columns
+  const columns: ColumnDef<IOPoint>[] = useMemo(() => [
     {
-      headerName: '',
-      field: 'selected',
-      width: 50,
-      pinned: 'left',
-      lockPosition: 'left',
-      suppressMovable: true
+      id: 'select',
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          checked={table.getIsAllRowsSelected()}
+          onChange={table.getToggleAllRowsSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      size: 40,
+      enableSorting: false,
+      enableColumnFilter: false,
     },
     {
-      headerName: 'Tag',
-      field: 'tag',
-      width: 120,
-      pinned: 'left',
-      editable: true,
-      cellClass: 'font-mono font-semibold text-primary-600',
-      cellEditor: 'agTextCellEditor'
-    },
-    {
-      headerName: 'Description',
-      field: 'description',
-      width: 200,
-      pinned: 'left',
-      editable: true,
-      cellEditor: 'agTextCellEditor'
-    },
-    {
-      headerName: 'I/O Type',
-      field: 'ioType',
-      width: 80,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: Object.values(IOType)
-      },
-      cellRenderer: (params: any) => {
-        if (!params.value) return '-';
-        const colors = {
-          'AI': 'bg-blue-100 text-blue-800',
-          'AO': 'bg-green-100 text-green-800',
-          'DI': 'bg-yellow-100 text-yellow-800',
-          'DO': 'bg-purple-100 text-purple-800'
-        };
-        return (
-          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${colors[params.value as IOType] || 'bg-gray-100 text-gray-800'}`}>
-            {params.value}
-          </span>
-        );
-      }
-    },
-    {
-      headerName: 'Signal Type',
-      field: 'signalType',
-      width: 120,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: Object.values(SignalType)
-      }
-    },
-    {
-      headerName: 'PLC',
-      field: 'plcName',
-      width: 100,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: () => getUniquePLCNames()
-      }
-    },
-    {
-      headerName: 'Rack',
-      field: 'rack',
-      width: 60,
-      editable: true,
-      cellClass: 'font-mono text-center',
-      cellEditor: 'agNumberCellEditor',
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value ?? '-'
-    },
-    {
-      headerName: 'Slot',
-      field: 'slot',
-      width: 60,
-      editable: true,
-      cellClass: 'font-mono text-center',
-      cellEditor: 'agNumberCellEditor',
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value ?? '-'
-    },
-    {
-      headerName: 'Channel',
-      field: 'channel',
-      width: 80,
-      editable: true,
-      cellClass: 'font-mono text-center',
-      cellEditor: 'agNumberCellEditor',
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value ?? '-',
-      cellRenderer: (params: any) => {
-        if (params.value === undefined || params.value === null) return '-';
+      accessorKey: 'tag',
+      header: 'Tag',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const cellKey = `${row.index}-${column.id}`;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
         
-        const ioPoint = params.data as IOPoint;
-        if (!ioPoint.plcName || ioPoint.rack === undefined || ioPoint.slot === undefined) {
-          return params.value;
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
         }
         
-        const utilization = getPLCCardUtilization(ioPoint.plcName, ioPoint.rack, ioPoint.slot);
-        if (!utilization) return params.value;
-        
         return (
-          <div className="flex items-center gap-2">
-            <span>{params.value}</span>
-            <div className="w-12 bg-gray-200 rounded-full h-1.5">
-              <div 
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  utilization.percentage > 90 ? 'bg-red-500' :
-                  utilization.percentage > 75 ? 'bg-yellow-500' :
-                  'bg-green-500'
-                }`}
-                style={{ width: `${utilization.percentage}%` }}
-                title={`Card utilization: ${utilization.used}/${utilization.total} channels (${utilization.percentage}%)`}
-              ></div>
-            </div>
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
           </div>
         );
-      }
+      },
     },
     {
-      headerName: 'Terminal Block',
-      field: 'terminalBlock',
-      width: 120,
-      editable: true,
-      cellClass: 'font-mono',
-      cellEditor: 'agTextCellEditor'
-    },
-    {
-      headerName: 'Cable',
-      field: 'cableId',
-      width: 100,
-      cellRenderer: (params: any) => {
-        if (!params.value) return '-';
-        // TODO: Look up cable tag from cableId
+      accessorKey: 'description',
+      header: 'Description',
+      size: 200,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
         return (
-          <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded cursor-pointer hover:bg-blue-200" 
-                title="Click to view cable details">
-            Cable-{params.value}
-          </span>
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
         );
-      }
+      },
+    },
+    {
+      accessorKey: 'signalType',
+      header: 'Signal Type',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as SignalType;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select...</option>
+              <option value="ANALOG_INPUT">Analog Input</option>
+              <option value="ANALOG_OUTPUT">Analog Output</option>
+              <option value="DIGITAL_INPUT">Digital Input</option>
+              <option value="DIGITAL_OUTPUT">Digital Output</option>
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value || '')}
+          >
+            {value ? value.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'ioType',
+      header: 'I/O Type',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as IOType;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select...</option>
+              <option value="INPUT">Input</option>
+              <option value="OUTPUT">Output</option>
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value || '')}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'plcName',
+      header: 'PLC Name',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select PLC...</option>
+              {Array.from(new Set(plcCards.map(card => card.plcName))).map(plcName => (
+                <option key={plcName} value={plcName}>{plcName}</option>
+              ))}
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'rack',
+      header: 'Rack',
+      size: 80,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'slot',
+      header: 'Slot',
+      size: 80,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'channel',
+      header: 'Channel',
+      size: 80,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'terminalBlock',
+      header: 'Terminal Block',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'function',
+      header: 'Function',
+      size: 150,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'validation',
+      header: 'Status',
+      size: 80,
+      cell: ({ row }) => {
+        const ioPoint = row.original;
+        const validation = validationResults.find(v => v.entityId === ioPoint.id);
+        return <ValidationIndicator validation={validation} />;
+      },
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+    {
+      id: 'actions',
+      header: '',
+      size: 60,
+      cell: ({ row }) => {
+        const ioPoint = row.original;
+        return (
+          <KebabMenu
+            items={[
+              {
+                icon: <Edit2 className="w-4 h-4" />,
+                label: 'Edit',
+                onClick: () => onIOPointEdit?.(ioPoint)
+              },
+              {
+                icon: <Trash2 className="w-4 h-4" />,
+                label: 'Delete',
+                onClick: () => ioPoint.id && onIOPointDelete(ioPoint.id),
+                variant: 'danger'
+              }
+            ]}
+          />
+        );
+      },
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+  ], [editingCell, editValue, validationResults, onIOPointEdit, onIOPointDelete, plcCards]);
+
+  // Create table instance
+  const table = useReactTable({
+    data: ioPoints,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    enableRowSelection: true,
+    onRowSelectionChange: (updater) => {
+      const newSelection = typeof updater === 'function' 
+        ? updater(table.getState().rowSelection)
+        : updater;
+      
+      const selectedIds = Object.keys(newSelection)
+        .filter(key => newSelection[key])
+        .map(key => ioPoints[parseInt(key)]?.id)
+        .filter(id => id !== undefined) as number[];
+      
+      onSelectionChange(selectedIds);
+    },
+    globalFilterFn: 'includesString',
+    state: {
+      globalFilter,
+      rowSelection: selectedIOPoints.reduce((acc, id) => {
+        const index = ioPoints.findIndex(ioPoint => ioPoint.id === id);
+        if (index !== -1) {
+          acc[index] = true;
+        }
+        return acc;
+      }, {} as Record<string, boolean>)
     }
-  ], [handleDelete, handleEdit, getPLCCardUtilization, getUniquePLCNames]);
+  });
 
-  const defaultColDef: ColDef = useMemo(() => ({
-    sortable: true,
-    filter: true,
-    resizable: true,
-    editable: false,
-    suppressHeaderMenuButton: false
-  }), []);
+  // Table selection hook
+  const {
+    selectedRows,
+    selectedRange,
+    selectedCells,
+    isSelecting,
+    isRangeSelecting,
+    lastClickedRow,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleRowClick,
+    handleRowMouseEnter,
+    clearSelection,
+    selectAll,
+    isCellSelected,
+    getCellRangeClass,
+    getSelectedData
+  } = useTableSelection({
+    data: ioPoints,
+    columns: table.getAllColumns().map(col => col.id),
+    onSelectionChange: (selectedIds) => {
+      onSelectionChange(selectedIds);
+    }
+  });
 
-  const onGridReady = useCallback((params: GridReadyEvent) => {
-    setGridApi(params.api);
-    console.log('IOTable: Grid ready');
+  // Editing functions
+  const handleStartEdit = useCallback((rowIndex: number, columnId: string, currentValue: any) => {
+    setEditingCell({ row: rowIndex, column: columnId });
+    setEditValue(currentValue?.toString() || '');
   }, []);
 
-  const onCellValueChanged = useCallback(async (event: CellValueChangedEvent) => {
-    const ioPoint = event.data as IOPoint;
-    const field = event.column.getColId();
-    const newValue = event.newValue;
-    const oldValue = event.oldValue;
+  const handleSaveEdit = useCallback(() => {
+    if (!editingCell) return;
     
-    if (ioPoint.id && field) {
-      // Track the change in revision history
-      revisionService.trackChange(
-        'io_point',
-        ioPoint.id,
-        ioPoint.tag || `IO Point ${ioPoint.id}`,
-        'update',
+    const ioPoint = ioPoints[editingCell.row];
+    if (!ioPoint?.id) return;
+    
+    const field = editingCell.column;
+    const oldValue = (ioPoint as any)[field];
+    let newValue: any = editValue;
+    
+    // Type conversion based on field
+    if (field === 'rack' || field === 'slot' || field === 'channel') {
+      newValue = editValue ? parseInt(editValue) : null;
+    }
+    
+    if (oldValue !== newValue) {
+      // Record change for undo
+      const action: UndoAction = {
+        action: 'update',
+        ioPointId: ioPoint.id,
         field,
         oldValue,
-        newValue
-      );
+        newValue,
+        timestamp: Date.now()
+      };
       
-      const updates: Partial<IOPoint> = { [field]: newValue };
-      onIOPointUpdate(ioPoint.id, updates);
+      setUndoStack(prev => [...prev.slice(-49), action]);
+      setRedoStack([]);
+      
+      // Track revision
+      revisionService.trackChange('iopoint', ioPoint.id, ioPoint.tag, 'update', field, oldValue, newValue);
+      
+      // Update the IO point
+      onIOPointUpdate(ioPoint.id, { [field]: newValue });
     }
-  }, [onIOPointUpdate]);
-
-  const onSelectionChanged = useCallback((event: SelectionChangedEvent) => {
-    const selectedRows = event.api.getSelectedRows();
-    const selectedIds = selectedRows.map((row: IOPoint) => row.id!);
-    onSelectionChange(selectedIds);
-  }, [onSelectionChange]);
-
-  // Generate next I/O point tag
-  const generateNextIOTag = useCallback(() => {
-    const existingTags = ioPoints
-      .map(io => io.tag)
-      .filter(tag => tag?.match(/^IO-\d+$/))
-      .map(tag => parseInt(tag!.replace('IO-', '')))
-      .filter(num => !isNaN(num));
     
-    const nextNumber = existingTags.length > 0 ? Math.max(...existingTags) + 1 : 1;
-    return `IO-${nextNumber.toString().padStart(3, '0')}`;
-  }, [ioPoints]);
+    setEditingCell(null);
+    setEditValue('');
+  }, [editingCell, editValue, ioPoints, onIOPointUpdate]);
 
-  // Handle inline add I/O point
-  const handleInlineAddIOPoint = useCallback(() => {
-    if (isAddingNew) return;
-    
-    setIsAddingNew(true);
-    const newIOPoint: IOPoint = {
-      tag: generateNextIOTag(),
-      description: '',
-      ioType: IOType.DI,
-      signalType: SignalType.TwentyFourVDC,
-      plcName: '',
-      rack: undefined,
-      slot: undefined,
-      channel: undefined,
-      terminalBlock: '',
-      cableId: undefined,
-      notes: '',
-      revisionId: 1,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    // Add to filtered I/O points for immediate display
-    setFilteredIOPoints(prev => [newIOPoint, ...prev]);
-
-    // Focus on the tag cell after a short delay
-    setTimeout(() => {
-      if (gridApi) {
-        gridApi.setFocusedCell(0, 'tag');
-        gridApi.startEditingCell({ rowIndex: 0, colKey: 'tag' });
-      }
-    }, 100);
-  }, [isAddingNew, generateNextIOTag, gridApi]);
-
-  // Handle row value change for new I/O point
-  const handleRowValueChanged = useCallback((event: CellValueChangedEvent) => {
-    const { data, column, newValue, oldValue } = event;
-    const field = column.getColId();
-    
-    if (newValue !== oldValue) {
-      // If this is a new I/O point (no id), create it
-      if (!data.id && isAddingNew) {
-        const ioData: IOPoint = {
-          ...data,
-          [field]: newValue,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        
-        // Save to database - use onIOPointUpdate with special id -1 to indicate new record
-        onIOPointUpdate(-1, ioData);
-        setIsAddingNew(false);
-        
-        // Remove the temporary row from filtered data since it will be added properly via props
-        setFilteredIOPoints(prev => prev.filter((_, index) => index !== 0 || prev[0].id));
-      } else if (data.id) {
-        // Existing I/O point, update normally
-        const updates: Partial<IOPoint> = {
-          [field]: newValue
-        };
-        onIOPointUpdate(data.id, updates);
-      }
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingCell(null);
+      setEditValue('');
     }
-  }, [isAddingNew, onIOPointUpdate]);
+  }, [handleSaveEdit]);
 
-  // Bulk action handlers
-  const handleBulkDelete = useCallback(async () => {
-    const confirmed = await showConfirm({
-      title: 'Delete I/O Points',
-      message: `Are you sure you want to delete ${selectedIOPoints.length} selected I/O points? This action cannot be undone.`,
-      confirmText: 'Delete All',
-      cancelText: 'Cancel',
-      type: 'danger'
-    });
+  // Undo/Redo functions
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    
+    const action = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [action, ...prev.slice(0, 49)]);
+    
+    // Revert the change
+    onIOPointUpdate(action.ioPointId, { [action.field]: action.oldValue });
+  }, [undoStack, onIOPointUpdate]);
 
-    if (confirmed) {
-      try {
-        for (const ioPointId of selectedIOPoints) {
-          onIOPointDelete(ioPointId);
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    
+    const action = redoStack[0];
+    setRedoStack(prev => prev.slice(1));
+    setUndoStack(prev => [...prev, action]);
+    
+    // Reapply the change
+    onIOPointUpdate(action.ioPointId, { [action.field]: action.newValue });
+  }, [redoStack, onIOPointUpdate]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts(table, selectedRange, {
+      onCopy: () => {
+        if (selectedRange) {
+          copyToClipboard(ioPoints, selectedRange, table.getAllColumns());
         }
-        showSuccess(`Successfully deleted ${selectedIOPoints.length} I/O points`);
-        onSelectionChange([]);
-      } catch (error) {
-        showError(`Failed to delete I/O points: ${error}`);
-      }
-    }
-  }, [selectedIOPoints, onIOPointDelete, onSelectionChange, showConfirm, showSuccess, showError]);
-
-  const handleBulkExport = useCallback(() => {
-    // Export only selected I/O points
-    const selectedIOData = filteredIOPoints.filter(io => selectedIOPoints.includes(io.id!));
-    
-    try {
-      const headers = [
-        'Tag',
-        'Description',
-        'I/O Type',
-        'Signal Type',
-        'PLC',
-        'Rack',
-        'Slot',
-        'Channel',
-        'Terminal Block',
-        'Cable ID',
-        'Notes'
-      ];
-
-      const csvContent = [
-        headers.join(','),
-        ...selectedIOData.map(io => [
-          `"${io.tag || ''}"`,
-          `"${io.description || ''}"`,
-          `"${io.ioType || ''}"`,
-          `"${io.signalType || ''}"`,
-          `"${io.plcName || ''}"`,
-          io.rack || '',
-          io.slot || '',
-          io.channel || '',
-          `"${io.terminalBlock || ''}"`,
-          io.cableId || '',
-          `"${io.notes?.replace(/"/g, '""') || ''}"`
-        ].join(','))
-      ].join('\n');
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      
-      if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        
-        const now = new Date();
-        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
-        const filename = `selected-io-points-${timestamp}.csv`;
-        
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        showSuccess(`Exported ${selectedIOData.length} selected I/O points to ${filename}`);
-      }
-    } catch (error) {
-      console.error('Export failed:', error);
-      showError(`Export failed: ${error}`);
-    }
-  }, [selectedIOPoints, filteredIOPoints, showSuccess, showError]);
-
-  const handleClearSelection = useCallback(() => {
-    onSelectionChange([]);
-  }, [onSelectionChange]);
-
-  // Auto-assign channel for an I/O point
-  const handleAutoAssignChannel = useCallback(async (ioPoint: IOPoint) => {
-    try {
-      const result = PLCAssignmentService.autoAssignChannel(ioPoint, plcCards, ioPoints);
-      
-      if (result.success && result.assignedChannel !== undefined) {
-        // Find the best card for assignment
-        let targetCard: PLCCard | undefined;
-        
-        if (ioPoint.plcName && ioPoint.rack !== undefined && ioPoint.slot !== undefined) {
-          // Use specified card
-          targetCard = plcCards.find(card => 
-            card.plcName === ioPoint.plcName &&
-            card.rack === ioPoint.rack &&
-            card.slot === ioPoint.slot
-          );
-        } else {
-          // Find best available card
-          const compatibleCards = plcCards.filter(card => 
-            card.ioType === ioPoint.ioType
-          );
-          
-          if (compatibleCards.length > 0) {
-            // Sort by utilization and pick the least utilized
-            const cardUtilizations = compatibleCards.map(card => {
-              const usedChannels = ioPoints.filter(io => 
-                io.plcName === card.plcName && 
-                io.rack === card.rack && 
-                io.slot === card.slot &&
-                io.channel !== undefined
-              ).length;
-              return { card, utilization: usedChannels / card.totalChannels };
-            });
+      },
+      onPaste: async () => {
+        if (selectedRange) {
+          try {
+            const clipboardData = await navigator.clipboard.readText();
+            const updates = await parseClipboardData(clipboardData, ioPoints, selectedRange, table.getAllColumns());
             
-            cardUtilizations.sort((a, b) => a.utilization - b.utilization);
-            targetCard = cardUtilizations[0]?.card;
+            updates.forEach(update => {
+              if (update.id) {
+                onIOPointUpdate(update.id, update.changes);
+              }
+            });
+          } catch (error) {
+            console.error('Failed to paste:', error);
           }
         }
-        
-        if (targetCard && ioPoint.id) {
-          const updates: Partial<IOPoint> = {
-            plcName: targetCard.plcName,
-            rack: targetCard.rack,
-            slot: targetCard.slot,
-            channel: result.assignedChannel
-          };
-          
-          await onIOPointUpdate(ioPoint.id, updates);
-          showSuccess(`Assigned ${ioPoint.tag} to ${targetCard.plcName} Rack ${targetCard.rack} Slot ${targetCard.slot} Channel ${result.assignedChannel}`);
+      },
+      onDelete: () => {
+        if (selectedRange) {
+          clearContents(ioPoints, selectedRange, table.getAllColumns(), (id, changes) => {
+            onIOPointUpdate(id, changes);
+          });
         }
-      } else {
-        showError(`Auto-assignment failed: ${result.errorMessage}`);
-        if (result.suggestions && result.suggestions.length > 0) {
-          console.log('Suggestions:', result.suggestions);
+      },
+      onFillDown: () => {
+        if (selectedRange) {
+          fillDown(ioPoints, selectedRange, table.getAllColumns(), (id, changes) => {
+            onIOPointUpdate(id, changes);
+          });
         }
-      }
-    } catch (error) {
-      showError(`Auto-assignment failed: ${error}`);
+      },
+      onFillRight: () => {
+        if (selectedRange) {
+          fillRight(ioPoints, selectedRange, table.getAllColumns(), (id, changes) => {
+            onIOPointUpdate(id, changes);
+          });
+        }
+      },
+      onStartEdit: (rowIndex, columnId) => {
+        const ioPoint = ioPoints[rowIndex];
+        const currentValue = (ioPoint as any)[columnId];
+        handleStartEdit(rowIndex, columnId, currentValue);
+      },
+      onUndo: handleUndo,
+      onRedo: handleRedo
+  });
+
+  // Cell mouse handlers for selection
+  const handleCellMouseDown = useCallback((
+    event: React.MouseEvent,
+    rowIndex: number,
+    columnKey: string
+  ) => {
+    if (event.button === 0) { // Left click only
+      handleMouseDown(rowIndex, columnKey, event);
     }
-  }, [plcCards, ioPoints, onIOPointUpdate, showSuccess, showError]);
+  }, [handleMouseDown]);
 
-  // Handle row context menu
-  const handleRowContextMenu = useCallback((event: React.MouseEvent, ioPoint?: IOPoint) => {
-    const menuItems: ContextMenuItem[] = [];
-
-    if (ioPoint) {
-      // Row-specific actions
-      menuItems.push(
-        {
-          id: 'edit',
-          label: 'Edit I/O Point',
-          icon: Edit2,
-          onClick: () => handleEdit(ioPoint),
-        },
-        {
-          id: 'duplicate',
-          label: 'Duplicate I/O Point',
-          icon: Copy,
-          onClick: () => {
-            const duplicatedIOPoint = { ...ioPoint };
-            delete duplicatedIOPoint.id;
-            duplicatedIOPoint.tag = `${ioPoint.tag}_copy`;
-            if (onIOPointEdit) {
-              onIOPointEdit(duplicatedIOPoint);
-            }
-          },
-        },
-        {
-          id: 'auto-assign',
-          label: 'Auto-assign Channel',
-          icon: Zap,
-          onClick: () => handleAutoAssignChannel(ioPoint),
-          disabled: !ioPoint.ioType,
-        },
-        {
-          id: 'delete',
-          label: 'Delete I/O Point',
-          icon: Trash2,
-          onClick: () => handleDelete(ioPoint),
-          variant: 'danger',
-          divider: true,
-        }
-      );
+  const handleCellMouseMove = useCallback((
+    event: React.MouseEvent,
+    rowIndex: number,
+    columnKey: string
+  ) => {
+    if (isSelecting) {
+      handleMouseMove(rowIndex, columnKey, event);
     }
+  }, [isSelecting, handleMouseMove]);
 
-    // Add new I/O point option (always available)
-    menuItems.push({
-      id: 'add-new',
-      label: 'Add New I/O Point',
-      icon: Plus,
-      onClick: () => handleInlineAddIOPoint(),
-    });
-
-    showContextMenu(event, menuItems);
-  }, [handleEdit, onIOPointEdit, handleAutoAssignChannel, handleDelete, handleInlineAddIOPoint, showContextMenu]);
-
-  // Keyboard navigation handlers
+  // Global mouse up handler
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === '/') {
-        event.preventDefault();
-        searchInputRef.current?.focus();
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        if (searchTerm) {
-          event.preventDefault();
-          setSearchTerm('');
-          return;
-        }
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.key === 'a' && gridApi) {
-        const activeElement = document.activeElement;
-        if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
-          event.preventDefault();
-          gridApi.selectAll();
-          return;
-        }
-      }
-
-      if (event.key === 'Delete' && selectedIOPoints.length > 0) {
-        const activeElement = document.activeElement;
-        if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
-          event.preventDefault();
-          handleBulkDelete();
-          return;
-        }
+    const handleGlobalMouseUp = () => {
+      if (isSelecting) {
+        handleMouseUp();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [searchTerm, selectedIOPoints.length, gridApi, handleBulkDelete]);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isSelecting, handleMouseUp]);
+
+  // Context menu functionality removed - can be added later if needed
+
+  const selectedCount = Object.keys(table.getState().rowSelection).length;
+  const hasSelection = selectedCount > 0;
 
   return (
     <div className="flex flex-col h-full">
-      {/* I/O-specific Toolbar moved to CompactHeader */}
-      
-      {/* Enhanced Search & Filter Section */}
-      <div className="bg-white border-b border-gray-200">
-        {/* Primary Search Bar */}
-        <div className="px-4 py-4">
-          <div className="relative max-w-2xl">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchTerm}
-              onChange={e => handleSearchChange(e.target.value)}
-              placeholder="Search I/O tag, description, PLC, signal type... (Ctrl+/)"
-              className="block w-full pl-10 pr-12 py-3 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 shadow-sm"
-            />
-            {searchTerm && (
-              <button
-                onClick={handleSearchClear}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                title="Clear search (Esc)"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">I/O Points ({ioPoints.length})</h2>
+          {hasSelection && (
+            <span className="text-sm text-gray-500">
+              {selectedCount} selected
+            </span>
+          )}
         </div>
         
-        {/* Quick Filters Bar */}
-        <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-medium text-gray-700">Quick filters:</span>
-            
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-600 font-medium">I/O Type</label>
-              <select 
-                value={filters.ioType}
-                onChange={e => handleFilterChange('ioType', e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white min-w-20"
-              >
-                <option value="">Any</option>
-                {Object.values(IOType).map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-600 font-medium">Signal Type</label>
-              <select 
-                value={filters.signalType}
-                onChange={e => handleFilterChange('signalType', e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white min-w-24"
-              >
-                <option value="">Any</option>
-                {getUniqueFilterValues('signalType').map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-600 font-medium">PLC</label>
-              <select 
-                value={filters.plc}
-                onChange={e => handleFilterChange('plc', e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white min-w-24"
-              >
-                <option value="">Any</option>
-                {getUniquePLCNames().map(plc => (
-                  <option key={plc} value={plc}>{plc}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-600 font-medium">Assignment</label>
-              <select 
-                value={filters.assigned}
-                onChange={e => handleFilterChange('assigned', e.target.value)}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white min-w-24"
-              >
-                <option value="">Any</option>
-                <option value="assigned">Assigned</option>
-                <option value="unassigned">Unassigned</option>
-              </select>
-            </div>
-            
-            {/* Clear filters button */}
-            {(searchTerm || filters.ioType || filters.signalType || filters.plc || filters.assigned) && (
-              <button 
-                onClick={handleClearFilters}
-                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 hover:border-gray-400 rounded-md bg-white hover:bg-gray-50 transition-colors"
-                title="Clear all filters and search"
-              >
-                Clear all
-              </button>
-            )}
-            
-          </div>
-          
-          {/* Filter summary */}
-          {(searchTerm || filters.ioType || filters.signalType || filters.plc || filters.assigned) && (
-            <div className="mt-2 text-xs text-gray-600">
-              Showing {filteredIOPoints.length} of {ioPoints.length} I/O points
-              {searchTerm && ` matching "${searchTerm}"`}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex flex-1">
-        {/* AG-Grid Table */}
-        <div className="flex-1 ag-theme-quartz">
-        <AgGridReact
-          rowData={filteredIOPoints}
-          columnDefs={columnDefs}
-          defaultColDef={defaultColDef}
-          onGridReady={onGridReady}
-          onCellValueChanged={handleRowValueChanged}
-          onSelectionChanged={onSelectionChanged}
-          onCellContextMenu={(event) => {
-            const ioPoint = event.data as IOPoint;
-            if (event.event) {
-              handleRowContextMenu(event.event as any as React.MouseEvent, ioPoint);
-            }
-          }}
-          rowSelection={{
-            mode: 'multiRow',
-            checkboxes: true,
-            headerCheckbox: true,
-            enableClickSelection: false
-          }}
-          animateRows={true}
-          enableCellTextSelection={true}
-          ensureDomOrder={true}
-          getRowId={(params) => params.data.id?.toString() || params.data.tag || Math.random().toString()}
-          noRowsOverlayComponent={() => (
-            <div className="flex items-center justify-center h-32 text-gray-500">
-              <div className="text-center">
-                <div className="text-2xl mb-2">📡</div>
-                <div className="text-sm font-medium mb-1">No I/O points found</div>
-                <div className="text-xs">Right-click in the table to add new I/O points</div>
-              </div>
-            </div>
-          )}
-        />
-        </div>
-
-        {/* PLC Card Panel */}
-        {showPLCPanel && (
-          <div className="w-80 border-l border-gray-200 bg-gray-50 flex flex-col">
-            <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-white">
-              <h3 className="text-sm font-medium text-gray-900">PLC Cards</h3>
-              <button
-                onClick={() => setShowPLCPanel(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded"
-                title="Hide PLC panel"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex-1 p-3 overflow-hidden">
-              <PLCCardPanel 
-                plcCards={plcCards} 
-                ioPoints={filteredIOPoints}
-                className="h-full"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* PLC Panel Toggle (when hidden) */}
-        {!showPLCPanel && (
-          <div className="w-8 border-l border-gray-200 bg-gray-50 flex items-center justify-center">
-            <button
-              onClick={() => setShowPLCPanel(true)}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded transform -rotate-90"
-              title="Show PLC panel"
-            >
-              <span className="text-xs font-medium">PLC</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Table Footer - Pagination */}
-      <div className="flex items-center justify-center px-4 py-2 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
         <div className="flex items-center gap-2">
-          <button 
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={true}
+          <button
+            onClick={onAddIOPoint}
+            className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Previous
+            Add IO Point
           </button>
-          <span className="text-sm px-2">Page 1 of 1</span>
-          <button 
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={true}
+          <button
+            onClick={onAddFromLibrary}
+            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Next
+            Add from Library
           </button>
         </div>
       </div>
 
-      {/* Bulk Actions Bar */}
-      <BulkActionsBar
-        selectedCount={selectedIOPoints.length}
-        entityName="I/O point"
-        onBulkEdit={onBulkEdit}
-        onBulkDelete={handleBulkDelete}
-        onBulkExport={handleBulkExport}
-        onClearSelection={handleClearSelection}
-        isLoading={false}
+      {/* Bulk Actions */}
+      {hasSelection && (
+        <BulkActionsBar
+          selectedCount={selectedCount}
+          onBulkEdit={onBulkEdit}
+          onBulkDelete={() => {
+            const selectedIds = Object.keys(table.getState().rowSelection)
+              .filter(key => table.getState().rowSelection[key])
+              .map(key => ioPoints[parseInt(key)]?.id)
+              .filter(id => id !== undefined) as number[];
+            
+            selectedIds.forEach(id => onIOPointDelete(id));
+          }}
+        />
+      )}
+
+      {/* Filters */}
+      <FilterBar
+        globalFilter={globalFilter}
+        onGlobalFilterChange={setGlobalFilter}
+        columnFilters={columnFilters}
+        onColumnFiltersChange={setColumnFilters}
+        columns={table.getAllColumns().map(col => ({
+          id: col.id,
+          label: typeof col.columnDef.header === 'string' ? col.columnDef.header : col.id
+        }))}
       />
 
-      {/* Context Menu */}
-      <ContextMenu
-        items={contextMenu.items}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        isOpen={contextMenu.isOpen}
-        onClose={hideContextMenu}
-      />
+      {/* Table */}
+      <div className="flex-1 overflow-hidden">
+        <div 
+          ref={tableRef}
+          className="h-full overflow-auto"
+          // Context menu removed for now
+        >
+          <table className="tanstack-table">
+            <thead>
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map(header => (
+                    <th
+                      key={header.id}
+                      style={{ width: header.getSize() }}
+                      className={header.column.getCanSort() ? 'sortable' : ''}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <div className="flex items-center gap-2">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {header.column.getIsSorted() && (
+                          <ChevronDown 
+                            className={`w-4 h-4 transition-transform ${
+                              header.column.getIsSorted() === 'desc' ? 'rotate-180' : ''
+                            }`}
+                          />
+                        )}
+                      </div>
+                      {header.column.getCanResize() && (
+                        <div
+                          className="resize-handle"
+                          onMouseDown={header.getResizeHandler()}
+                        />
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map(row => (
+                <tr
+                  key={row.id}
+                  className={`
+                    ${row.getIsSelected() ? 'selected' : ''}
+                    ${selectedRows.has(parseInt(row.id)) ? 'table-row-selected' : ''}
+                    ${isRangeSelecting && selectedRange && 
+                      parseInt(row.id) >= Math.min(selectedRange.start.row, selectedRange.end.row) &&
+                      parseInt(row.id) <= Math.max(selectedRange.start.row, selectedRange.end.row)
+                      ? 'table-row-range' : ''}
+                  `}
+                  onClick={(e) => handleRowClick(e, parseInt(row.id))}
+                  onMouseEnter={() => handleRowMouseEnter(parseInt(row.id))}
+                  // Row context menu removed for now
+                >
+                  {row.getVisibleCells().map(cell => (
+                    <td key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          
+          {table.getRowModel().rows.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+              <Calculator className="w-12 h-12 mb-4 text-gray-400" />
+              <h3 className="text-lg font-medium mb-2">No I/O Points</h3>
+              <p className="text-sm text-center mb-4">
+                Get started by adding your first I/O point.
+              </p>
+              <button
+                onClick={onAddIOPoint}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+              >
+                Add IO Point
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,17 +1,31 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridReadyEvent, CellValueChangedEvent, SelectionChangedEvent } from 'ag-grid-community';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  ColumnDef,
+  Row,
+  Table as TanStackTable
+} from '@tanstack/react-table';
 import { Cable, Tray, Conduit } from '../../types';
-import { ValidationStatus } from '../../types/validation';
+import { ValidationResult } from '../../types/validation';
 import { validationService } from '../../services/validation-service';
 import { revisionService } from '../../services/revision-service';
-import { autoNumberingService } from '../../services/auto-numbering-service';
-import { ColumnDefinition, columnService } from '../../services/column-service';
-import { FilterCondition, filterService } from '../../services/filter-service';
-import { createColumnDef, createSelectionColumn } from '../../utils/ag-grid-utils';
-import { TauriDatabaseService } from '../../services/tauri-database';
-import { calculationService } from '../../services/calculation-service';
-import CompactFilterBar from '../filters/CompactFilterBar';
+import { useTableSelection } from '../../hooks/useTableSelection';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { 
+  copyToClipboard, 
+  parseClipboardData,
+  parseClipboardDataRaw,
+  fillDown,
+  fillRight,
+  fillSeries,
+  clearContents 
+} from '../../utils/tanstack-helpers';
+import TableContextMenu from './TableContextMenu';
+import FilterBar from '../layout/FilterBar';
 import CableTypeBadge from '../ui/CableTypeBadge';
 import StatusIndicator from '../ui/StatusIndicator';
 import ValidationIndicator from '../ui/ValidationIndicator';
@@ -21,7 +35,11 @@ import DuplicateCablesModal from '../modals/DuplicateCablesModal';
 import ColumnManagerModal from '../modals/ColumnManagerModal';
 import { useUI } from '../../contexts/UIContext';
 import { Edit2, Trash2, ChevronDown, Calculator, TrendingUp, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
-import { fillRange, fillSeries, clearContents, handleKeyboardShortcuts } from '../../utils/ag-grid-excel';
+import { ColumnDefinition, columnService } from '../../services/column-service';
+import { FilterCondition, filterService } from '../../services/filter-service';
+import { calculationService } from '../../services/calculation-service';
+import { TauriDatabaseService } from '../../services/tauri-database';
+import '../../styles/tanstack-table.css';
 
 interface CableTableProps {
   cables: Cable[];
@@ -35,6 +53,7 @@ interface CableTableProps {
   onSelectionChange: (selectedIds: number[]) => void;
   onAddCable: (cableData: Partial<Cable>) => Promise<Cable>;
   onGetNextTag: () => Promise<string>;
+  onDuplicate?: (cables: Cable[], count: number) => Promise<void>;
   // Filter props from parent
   searchTerm?: string;
   functionFilter?: string;
@@ -56,1120 +75,775 @@ const CableTable: React.FC<CableTableProps> = ({
   onSelectionChange,
   onAddCable,
   onGetNextTag,
+  onDuplicate,
   searchTerm = '',
-  functionFilter = 'Any',
-  voltageFilter = 'Any',
-  fromFilter = 'Any',
-  toFilter = 'Any',
-  routeFilter = 'Any'
+  functionFilter = '',
+  voltageFilter = '',
+  fromFilter = '',
+  toFilter = '',
+  routeFilter = ''
 }) => {
-  const { showConfirm, showSuccess, showError } = useUI();
+  const { showSuccess, showError } = useUI();
+  const tableRef = useRef<HTMLTableElement>(null);
   
-  // Filtered cables state
-  const [filteredCables, setFilteredCables] = useState<Cable[]>([]);
-  const [gridApi, setGridApi] = useState<any>(null);
-  
-  // Track validation status for each cable
-  const [cableValidationStatus, setCableValidationStatus] = useState<Map<number, ValidationStatus>>(new Map());
-  
-  // Empty row state for Excel-like editing
-  const [isCreatingNewCable, setIsCreatingNewCable] = useState(false);
-  
-  // Duplicate modal state
-  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
-  
-  // Column management state
-  const [columnDefinitions, setColumnDefinitions] = useState<ColumnDefinition[]>([]);
-  const [showColumnManager, setShowColumnManager] = useState(false);
-  
-  // Filter state
-  const [activeFilters, setActiveFilters] = useState<FilterCondition[]>([]);
-
-  // Voltage drop calculation state
-  const [isCalculatingVoltageDrops, setIsCalculatingVoltageDrops] = useState(false);
-  const [voltageDropProgress, setVoltageDropProgress] = useState<{
-    completed: number;
-    total: number;
-    message: string;
+  // State
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    visible: boolean;
   } | null>(null);
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+  const [duplicatesModalOpen, setDuplicatesModalOpen] = useState(false);
+  const [columnManagerOpen, setColumnManagerOpen] = useState(false);
+  const [validationResults, setValidationResults] = useState<{[key: number]: ValidationResult[]}>({});
+  const [bulkCalculationInProgress, setBulkCalculationInProgress] = useState(false);
+  const [editingCell, setEditingCell] = useState<{row: number, column: string} | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+  const [columnSizing, setColumnSizing] = useState<Record<string, number>>({});
+  const [columnSizingInfo, setColumnSizingInfo] = useState<any>({});
+  const [undoStack, setUndoStack] = useState<Array<{
+    action: 'update';
+    cableId: number;
+    field: string;
+    oldValue: any;
+    newValue: any;
+    timestamp: number;
+  }>>([]);
+  const [redoStack, setRedoStack] = useState<Array<{
+    action: 'update';
+    cableId: number;
+    field: string;
+    oldValue: any;
+    newValue: any;
+    timestamp: number;
+  }>>([]);
 
-  // Load column settings and filters on mount
-  useEffect(() => {
-    const savedColumns = columnService.loadColumnSettings();
-    setColumnDefinitions(savedColumns);
-    
-    const filterState = filterService.getFilterState();
-    setActiveFilters(filterState.activeFilters);
-  }, []);
+  // Table selection hook for range selection
+  const {
+    selectedRange,
+    selectedCells,
+    isSelecting,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    clearSelection,
+    selectAll,
+    isCellSelected,
+    getCellRangeClass
+  } = useTableSelection();
 
-  // Apply filters using props
-  useEffect(() => {
-    let filtered = [...cables];
-    
-    // Apply search term filter
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(cable => {
-        return (
-          cable.tag?.toLowerCase().includes(searchLower) ||
-          cable.description?.toLowerCase().includes(searchLower) ||
-          cable.fromEquipment?.toLowerCase().includes(searchLower) ||
-          cable.toEquipment?.toLowerCase().includes(searchLower) ||
-          cable.route?.toLowerCase().includes(searchLower) ||
-          cable.function?.toLowerCase().includes(searchLower) ||
-          cable.cableType?.toLowerCase().includes(searchLower) ||
-          cable.size?.toLowerCase().includes(searchLower) ||
-          cable.fromLocation?.toLowerCase().includes(searchLower) ||
-          cable.toLocation?.toLowerCase().includes(searchLower)
-        );
-      });
-    }
-
-    // Apply function filter
-    if (functionFilter && functionFilter !== 'Any') {
-      filtered = filtered.filter(cable => cable.function === functionFilter);
-    }
-
-    // Apply voltage filter
-    if (voltageFilter && voltageFilter !== 'Any') {
-      filtered = filtered.filter(cable => cable.voltage?.toString() === voltageFilter);
-    }
-
-    // Apply route filter
-    if (routeFilter && routeFilter !== 'Any') {
-      filtered = filtered.filter(cable => cable.route === routeFilter);
-    }
-
-    // Apply from equipment filter
-    if (fromFilter && fromFilter !== 'Any') {
-      filtered = filtered.filter(cable => cable.fromEquipment === fromFilter);
-    }
-
-    // Apply to equipment filter
-    if (toFilter && toFilter !== 'Any') {
-      filtered = filtered.filter(cable => cable.toEquipment === toFilter);
-    }
-    
-    // Add empty row at the bottom for new cable entry
-    const emptyRow: Cable = {
-      id: -1, // Special ID for empty row
-      tag: '',
-      revisionId: 0, // Required field
-      description: '',
-      function: undefined,
-      voltage: undefined,
-      cableType: '',
-      size: '',
-      cores: undefined,
-      fromLocation: '',
-      fromEquipment: '',
-      toLocation: '',
-      toEquipment: '',
-      length: undefined,
-      route: '',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    filtered.push(emptyRow);
-    setFilteredCables(filtered);
-    
-    // Apply advanced filters
-    if (activeFilters.length > 0) {
-      // Create a temporary filter service instance with current filters
-      const tempFilterService = filterService;
-      tempFilterService.setActiveFilters(activeFilters);
-      filtered = tempFilterService.applyFilters(filtered);
-    }
-  }, [cables, searchTerm, functionFilter, voltageFilter, routeFilter, fromFilter, toFilter, activeFilters]);
-
-  // AG-Grid event handlers
-  const onGridReady = useCallback((params: GridReadyEvent) => {
-    setGridApi(params.api);
-    console.log('CableTable: Grid ready, API available');
-  }, []);
-
-  const onCellValueChanged = useCallback(async (event: CellValueChangedEvent) => {
-    const cable = event.data as Cable;
-    const field = event.colDef.field as keyof Cable;
-    const newValue = event.newValue;
-
-    console.log(`CableTable: Cell value changed - ${field}: ${event.oldValue} → ${newValue}`);
-
-    // Handle empty row (new cable creation)
-    if (cable.id === -1) {
-      console.log('CableTable: Creating new cable from empty row');
-      try {
-        // Get next tag if tag field is empty or use auto-numbering
-        let tag = newValue;
-        if (field !== 'tag' || !tag) {
-          // Use auto-numbering service to generate next tag
-          tag = autoNumberingService.getNextTag(cables);
-        }
-        
-        // Create the cable
-        const cableData: Partial<Cable> = {
-          tag,
-          [field]: newValue
-        };
-        
-        const newCable = await onAddCable(cableData);
-        console.log('CableTable: New cable created:', newCable);
-        
-        // Track the creation in revision history
-        if (newCable.id) {
-          revisionService.trackChange(
-            'cable',
-            newCable.id,
-            newCable.tag || `Cable ${newCable.id}`,
-            'create'
-          );
-        }
-        
-        showSuccess(`Cable ${newCable.tag} created successfully!`);
-      } catch (error) {
-        console.error('CableTable: Failed to create new cable:', error);
-        showError(`Failed to create cable: ${error}`);
-      }
-    }
-    // Handle existing cable updates
-    else if (cable.id && field) {
-      const oldValue = event.oldValue;
+  // Filter cables based on props
+  const filteredCables = useMemo(() => {
+    return cables.filter(cable => {
+      if (searchTerm && !Object.values(cable).some(value => 
+        String(value).toLowerCase().includes(searchTerm.toLowerCase())
+      )) return false;
       
-      // Track the change in revision history
-      revisionService.trackChange(
-        'cable',
-        cable.id,
-        cable.tag || `Cable ${cable.id}`,
-        'update',
-        field,
-        oldValue,
-        newValue
-      );
+      if (functionFilter && cable.function !== functionFilter) return false;
+      if (voltageFilter && cable.voltage?.toString() !== voltageFilter) return false;
+      if (fromFilter && cable.fromLocation !== fromFilter) return false;
+      if (toFilter && cable.toLocation !== toFilter) return false;
       
-      onCableUpdate(cable.id, { [field]: newValue });
+      // Route filter checks trays and conduits
+      if (routeFilter) {
+        const hasTrayRoute = cable.trayId && 
+          trays.find(t => t.id === cable.trayId)?.tag?.includes(routeFilter);
+        const hasConduitRoute = cable.conduitId && 
+          conduits.find(c => c.id === cable.conduitId)?.tag?.includes(routeFilter);
+        if (!hasTrayRoute && !hasConduitRoute) return false;
+      }
       
-      // Trigger fill recalculation when tray or conduit assignment changes
-      if (field === 'trayId' || field === 'conduitId') {
-        try {
-          const databaseService = TauriDatabaseService.getInstance();
-          
-          // Recalculate fill for the old assignment (if it existed)
-          if (oldValue) {
-            if (field === 'trayId') {
-              await databaseService.recalculateTrayFill(oldValue);
-            } else {
-              await databaseService.recalculateConduitFill(oldValue);
-            }
-          }
-          
-          // Recalculate fill for the new assignment (if it exists)
-          if (newValue) {
-            if (field === 'trayId') {
-              await databaseService.recalculateTrayFill(newValue);
-            } else {
-              await databaseService.recalculateConduitFill(newValue);
-            }
-          }
-          
-          console.log(`Fill recalculation triggered for ${field} change: ${oldValue} → ${newValue}`);
-        } catch (error) {
-          console.error('Failed to recalculate fill percentages:', error);
-        }
-      }
-    }
-  }, [onCableUpdate, onAddCable, onGetNextTag, showSuccess, showError]);
-
-  const onSelectionChanged = useCallback((event: SelectionChangedEvent) => {
-    const selectedRows = event.api.getSelectedRows();
-    const selectedIds = selectedRows
-      .filter((cable: Cable) => cable.id !== undefined)
-      .map((cable: Cable) => cable.id!);
-    
-    console.log('CableTable: Selection changed', selectedIds);
-    onSelectionChange(selectedIds);
-  }, [onSelectionChange]);
-
-  // Excel-like keyboard navigation
-  const navigateToNextCell = useCallback((params: any) => {
-    const suggestedNextCell = params.nextCellPosition;
-    
-    // Don't navigate to empty row for non-editing actions
-    if (suggestedNextCell && suggestedNextCell.rowIndex === filteredCables.length - 1) {
-      const cable = filteredCables[suggestedNextCell.rowIndex];
-      if (cable?.id === -1 && !params.editing) {
-        return null; // Stay in current cell
-      }
-    }
-    
-    return suggestedNextCell;
-  }, [filteredCables]);
-
-  const tabToNextCell = useCallback((params: any) => {
-    const suggestedNextCell = params.nextCellPosition;
-    
-    // Handle tab navigation in empty row to create new cable
-    if (suggestedNextCell && suggestedNextCell.rowIndex === filteredCables.length - 1) {
-      const cable = filteredCables[suggestedNextCell.rowIndex];
-      if (cable?.id === -1) {
-        // Allow tabbing to start editing in empty row
-        return suggestedNextCell;
-      }
-    }
-    
-    return suggestedNextCell;
-  }, [filteredCables]);
-
-  // Delete handlers
-  const handleDeleteCable = useCallback(async (cable: Cable) => {
-    const confirmed = await showConfirm({
-      title: `Delete Cable ${cable.tag}`,
-      message: 'Are you sure you want to delete this cable? This action cannot be undone.'
+      return true;
     });
-
-    if (confirmed && cable.id) {
-      try {
-        // Track the deletion in revision history
-        revisionService.trackChange(
-          'cable',
-          cable.id,
-          cable.tag || `Cable ${cable.id}`,
-          'delete'
-        );
-        
-        onCableDelete(cable.id);
-        showSuccess(`Cable "${cable.tag}" deleted successfully`);
-      } catch (error) {
-        showError(`Failed to delete cable: ${error}`);
-      }
-    }
-  }, [onCableDelete, showConfirm, showSuccess, showError]);
-
-  const handleBulkDelete = useCallback(async () => {
-    if (selectedCables.length === 0) return;
-
-    const confirmed = await showConfirm({
-      title: `Delete ${selectedCables.length} Cable${selectedCables.length !== 1 ? 's' : ''}`,
-      message: 'Are you sure you want to delete the selected cables? This action cannot be undone.'
-    });
-
-    if (confirmed) {
-      try {
-        // Track deletions in revision history
-        const cablesToDelete = cables.filter(cable => cable.id && selectedCables.includes(cable.id));
-        cablesToDelete.forEach(cable => {
-          if (cable.id) {
-            revisionService.trackChange(
-              'cable',
-              cable.id,
-              cable.tag || `Cable ${cable.id}`,
-              'delete'
-            );
-          }
-        });
-        
-        for (const id of selectedCables) {
-          onCableDelete(id);
-        }
-        showSuccess(`${selectedCables.length} cable${selectedCables.length !== 1 ? 's' : ''} deleted successfully`);
-      } catch (error) {
-        showError(`Failed to delete cables: ${error}`);
-      }
-    }
-  }, [cables, selectedCables, onCableDelete, showConfirm, showSuccess, showError]);
-
-  const handleBulkDuplicate = useCallback(() => {
-    if (selectedCables.length === 0) return;
-    setShowDuplicateModal(true);
-  }, [selectedCables.length]);
-
-  const handleDuplicateCables = useCallback(async (cablesToDuplicate: Cable[], count: number) => {
-    try {
-      const totalCopies = cablesToDuplicate.length * count;
-      const newTags = autoNumberingService.getNextTags(cables, totalCopies);
-      
-      let tagIndex = 0;
-      const promises = [];
-      
-      for (let i = 0; i < count; i++) {
-        for (const cable of cablesToDuplicate) {
-          const cableData: Partial<Cable> = {
-            ...cable,
-            id: undefined, // Remove ID so it creates a new cable
-            tag: newTags[tagIndex++],
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-          
-          promises.push(onAddCable(cableData));
-        }
-      }
-      
-      await Promise.all(promises);
-      showSuccess(`${totalCopies} cable${totalCopies !== 1 ? 's' : ''} duplicated successfully!`);
-      setShowDuplicateModal(false);
-    } catch (error) {
-      console.error('Failed to duplicate cables:', error);
-      showError(`Failed to duplicate cables: ${error}`);
-    }
-  }, [cables, onAddCable, showSuccess, showError]);
-
-  // Column manager handlers
-  const handleOpenColumnManager = useCallback(() => {
-    setShowColumnManager(true);
-  }, []);
-
-  const handleCloseColumnManager = useCallback(() => {
-    setShowColumnManager(false);
-  }, []);
-
-  const handleApplyColumns = useCallback((newColumns: ColumnDefinition[]) => {
-    setColumnDefinitions(newColumns);
-    showSuccess('Column settings applied successfully!');
-  }, [showSuccess]);
-
-  // Filter handlers
-  const handleFiltersChange = useCallback((filters: FilterCondition[]) => {
-    setActiveFilters(filters);
-  }, []);
-
-  // Calculate voltage drops for all cables
-  const handleCalculateAllVoltageDrops = useCallback(async () => {
-    setIsCalculatingVoltageDrops(true);
-    setVoltageDropProgress({ completed: 0, total: cables.length, message: 'Starting calculations...' });
-
-    try {
-      // Filter cables that have the required data for voltage drop calculation
-      const calculablecables = cables.filter(cable => 
-        cable.id && cable.id !== -1 && 
-        cable.voltage && 
-        cable.length && 
-        cable.size &&
-        (cable.current || cable.function) // Need either current or function to estimate current
-      );
-
-      setVoltageDropProgress({ 
-        completed: 0, 
-        total: calculablecables.length, 
-        message: `Found ${calculablecables.length} cables with sufficient data for calculation` 
-      });
-
-      let completed = 0;
-      const batchSize = 5; // Process in batches to avoid overwhelming the backend
-
-      for (let i = 0; i < calculablecables.length; i += batchSize) {
-        const batch = calculablecables.slice(i, i + batchSize);
-        
-        // Process batch in parallel
-        await Promise.allSettled(
-          batch.map(async (cable) => {
-            try {
-              if (cable.id) {
-                await calculationService.updateCableVoltageDropCalculation(cable.id);
-                completed++;
-                setVoltageDropProgress({ 
-                  completed, 
-                  total: calculablecables.length, 
-                  message: `Calculated voltage drop for ${cable.tag}` 
-                });
-              }
-            } catch (error) {
-              console.error(`Failed to calculate voltage drop for cable ${cable.tag}:`, error);
-            }
-          })
-        );
-      }
-
-      setVoltageDropProgress({ 
-        completed: calculablecables.length, 
-        total: calculablecables.length, 
-        message: 'Calculations complete! Refreshing table...' 
-      });
-
-      // Force grid refresh to show updated values
-      if (gridApi) {
-        gridApi.redrawRows();
-      }
-
-      // Clear progress after a short delay
-      setTimeout(() => {
-        setVoltageDropProgress(null);
-        setIsCalculatingVoltageDrops(false);
-      }, 2000);
-
-    } catch (error) {
-      console.error('Failed to calculate voltage drops:', error);
-      setVoltageDropProgress({ 
-        completed: 0, 
-        total: cables.length, 
-        message: 'Calculation failed. Please try again.' 
-      });
-      setTimeout(() => {
-        setVoltageDropProgress(null);
-        setIsCalculatingVoltageDrops(false);
-      }, 3000);
-    }
-  }, [cables, gridApi]);
-
-  // Get validation status for a cable
-  const getCableValidationStatus = useCallback((cableId?: number): ValidationStatus => {
-    if (!cableId) return { hasIssues: false, errorCount: 0, warningCount: 0 };
-    return cableValidationStatus.get(cableId) || { hasIssues: false, errorCount: 0, warningCount: 0 };
-  }, [cableValidationStatus]);
-
-  // Get validation CSS class for a row
-  const getRowClass = useCallback((params: any) => {
-    const cable = params.data as Cable;
-    
-    // Special styling for empty row
-    if (cable.id === -1) {
-      return 'empty-row';
-    }
-    
-    const status = getCableValidationStatus(cable.id);
-    
-    if (status.errorCount > 0) {
-      return 'validation-error-row';
-    } else if (status.warningCount > 0) {
-      return 'validation-warning-row';
-    }
-    
-    return '';
-  }, [getCableValidationStatus]);
+  }, [cables, searchTerm, functionFilter, voltageFilter, fromFilter, toFilter, routeFilter, trays, conduits]);
 
   // Column definitions
-  const columnDefs: ColDef[] = useMemo(() => [
+  const columns = useMemo<ColumnDef<Cable>[]>(() => [
+    // Selection column
     {
-      headerName: '',
-      field: 'selection',
-      width: 50,
-      pinned: 'left',
-      lockPosition: 'left',
-      suppressMovable: true,
+      id: 'selection',
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          checked={table.getIsAllRowsSelected()}
+          onChange={table.getToggleAllRowsSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      size: 50,
+      enableSorting: false,
+      enableColumnFilter: false
     },
+    // Tag column
     {
-      headerName: 'Tag',
-      field: 'tag',
-      width: 120,
-      pinned: 'left',
-      cellClass: (params: any) => {
-        let baseClass = '';
-        
-        if (params.data.id === -1 && !params.value) {
-          baseClass = 'font-mono font-semibold text-gray-400 italic';
-        } else {
-          baseClass = params.data.id === -1 
-            ? 'font-mono font-semibold text-gray-400 italic' 
-            : 'font-mono font-semibold text-blue-600';
-        }
-        
-        // Add validation styling
-        if (params.data.id !== -1) {
-          if (!params.value || params.value.trim() === '') {
-            baseClass += ' validation-error-cell';
-          }
-        }
-        
-        return baseClass;
+      accessorKey: 'tag',
+      header: 'Tag',
+      cell: ({ getValue, row }) => (
+        <span className="font-mono font-semibold text-blue-600">
+          {getValue() as string}
+        </span>
+      ),
+      size: 120
+    },
+    // Description column
+    {
+      accessorKey: 'description',
+      header: 'Description',
+      size: 200
+    },
+    // Voltage column
+    {
+      accessorKey: 'voltage',
+      header: 'Voltage',
+      cell: ({ getValue }) => {
+        const voltage = getValue() as number;
+        const formatVoltage = (v: number) => {
+          if (v === 0) return '0V';
+          if (v >= 10000) return `${(v / 1000).toFixed(1).replace('.0', '')}kV`;
+          return `${v}V`;
+        };
+        return <span>{formatVoltage(voltage)}</span>;
       },
-      editable: true,
-      cellEditor: 'agTextCellEditor',
-      cellRenderer: (params: any) => {
-        if (params.data.id === -1 && !params.value) {
-          return 'Enter cable tag...';
-        }
-        return params.value || '';
-      }
+      size: 100
     },
+    // Function column
     {
-      headerName: 'Description',
-      field: 'description',
-      width: 200,
-      editable: true,
-      cellEditor: 'agTextCellEditor',
-      cellClass: (params: any) => {
-        if (params.data.id === -1 && !params.value) {
-          return 'text-gray-400 italic';
-        }
-        return '';
-      },
-      cellRenderer: (params: any) => {
-        if (params.data.id === -1 && !params.value) {
-          return 'Enter description...';
-        }
-        return params.value || '';
-      }
-    },
-    {
-      headerName: 'Function',
-      field: 'function',
-      width: 130,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: ['Power', 'Signal', 'Control', 'Lighting', 'Communication', 'Spare']
-      },
-      cellClass: (params: any) => {
-        if (params.data.id === -1 && !params.value) {
-          return 'text-gray-400 italic';
-        }
-        return '';
-      },
-      cellRenderer: (params: any) => {
-        if (params.data.id === -1 && !params.value) {
-          return 'Select function...';
-        }
-        return params.value || '';
-      }
-    },
-    {
-      headerName: 'Type',
-      field: 'cableType',
-      width: 120,
-      cellRenderer: (params: any) => {
-        if (!params.value) return '-';
-        return <CableTypeBadge type={params.value} />;
-      }
-    },
-    {
-      headerName: 'Size (AWG)',
-      field: 'size',
-      width: 100,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: [
-          '22 AWG', '20 AWG', '18 AWG', '16 AWG', '14 AWG', '12 AWG', '10 AWG',
-          '8 AWG', '6 AWG', '4 AWG', '2 AWG', '1 AWG', '1/0 AWG', '2/0 AWG',
-          '3/0 AWG', '4/0 AWG', '250 MCM', '300 MCM', '350 MCM', '400 MCM',
-          '500 MCM', '600 MCM', '750 MCM', '1000 MCM'
-        ]
-      }
-    },
-    {
-      headerName: 'Voltage (V)',
-      field: 'voltage',
-      width: 100,
-      editable: true,
-      type: 'numericColumn',
-      cellEditor: 'agNumberCellEditor',
-      cellEditorParams: {
-        min: 0,
-        max: 50000,
-        precision: 0
-      }
-    },
-    {
-      headerName: 'From',
-      field: 'fromEquipment',
-      width: 150,
-      editable: true,
-      cellEditor: 'agTextCellEditor',
-      cellClass: (params: any) => {
-        if (params.data.id === -1 && !params.value) {
-          return 'text-gray-400 italic';
-        }
-        return '';
-      },
-      cellRenderer: (params: any) => {
-        if (params.data.id === -1 && !params.value) {
-          return 'From equipment...';
-        }
-        return params.value || '';
-      }
-    },
-    {
-      headerName: 'To',
-      field: 'toEquipment',
-      width: 150,
-      editable: true,
-      cellEditor: 'agTextCellEditor',
-      cellClass: (params: any) => {
-        if (params.data.id === -1 && !params.value) {
-          return 'text-gray-400 italic';
-        }
-        return '';
-      },
-      cellRenderer: (params: any) => {
-        if (params.data.id === -1 && !params.value) {
-          return 'To equipment...';
-        }
-        return params.value || '';
-      }
-    },
-    {
-      headerName: 'Length (ft)',
-      field: 'length',
-      width: 100,
-      editable: true,
-      type: 'numericColumn',
-      cellEditor: 'agNumberCellEditor',
-      cellEditorParams: {
-        min: 0,
-        max: 50000,
-        precision: 1
-      }
-    },
-    {
-      headerName: 'Route',
-      field: 'route',
-      width: 120,
-      editable: true,
-      cellEditor: 'agTextCellEditor',
-    },
-    {
-      headerName: 'Tray',
-      field: 'trayId',
-      width: 100,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: ['', ...trays.map(t => `${t.tag} (${t.fillPercentage?.toFixed(1) || 0}%)`)]
-      },
-      cellRenderer: (params: any) => {
-        if (!params.value) return '-';
-        const tray = trays.find(t => t.id === params.value);
-        if (!tray) return '-';
-        const fillColor = tray.fillPercentage > 80 ? 'text-red-600' : tray.fillPercentage > 50 ? 'text-yellow-600' : 'text-green-600';
+      accessorKey: 'function',
+      header: 'Function',
+      cell: ({ getValue }) => {
+        const cableFunction = getValue() as string | undefined;
+        if (!cableFunction) return null;
+        const getIcon = (func: string) => {
+          const icons: Record<string, string> = {
+            'Power': '⚡',
+            'Control': '🎛️',
+            'Signal': '📊',
+            'Communication': '📡',
+            'Lighting': '💡',
+            'Spare': '🔌'
+          };
+          return icons[func] || '🔌';
+        };
         return (
-          <span className={`text-sm ${fillColor}`} title={`Fill: ${tray.fillPercentage?.toFixed(1) || 0}%`}>
-            {tray.tag}
+          <span className="flex items-center gap-2">
+            <span>{getIcon(cableFunction)}</span>
+            {cableFunction}
           </span>
         );
       },
-      valueSetter: (params: any) => {
-        const value = params.newValue;
-        if (value && value.includes('(')) {
-          // Extract tray tag from "TAG (fill%)" format
-          const tag = value.split(' (')[0];
-          const tray = trays.find(t => t.tag === tag);
-          params.data.trayId = tray?.id || null;
-        } else {
-          params.data.trayId = null;
-        }
-        return true;
-      }
+      size: 150
     },
+    // Cable Type column
     {
-      headerName: 'Conduit',
-      field: 'conduitId',
-      width: 100,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: ['', ...conduits.map(c => `${c.tag} (${c.fillPercentage?.toFixed(1) || 0}%)`)]
+      accessorKey: 'cableType',
+      header: 'Cable Type',
+      cell: ({ getValue }) => {
+        const cableType = getValue() as string;
+        return cableType ? <span className="text-sm">{cableType}</span> : null;
       },
-      cellRenderer: (params: any) => {
-        if (!params.value) return '-';
-        const conduit = conduits.find(c => c.id === params.value);
-        if (!conduit) return '-';
-        const fillColor = conduit.fillPercentage > 80 ? 'text-red-600' : conduit.fillPercentage > 50 ? 'text-yellow-600' : 'text-green-600';
-        return (
-          <span className={`text-sm ${fillColor}`} title={`Fill: ${conduit.fillPercentage?.toFixed(1) || 0}%`}>
-            {conduit.tag}
-          </span>
-        );
-      },
-      valueSetter: (params: any) => {
-        const value = params.newValue;
-        if (value && value.includes('(')) {
-          // Extract conduit tag from "TAG (fill%)" format
-          const tag = value.split(' (')[0];
-          const conduit = conduits.find(c => c.tag === tag);
-          params.data.conduitId = conduit?.id || null;
-        } else {
-          params.data.conduitId = null;
-        }
-        return true;
-      }
+      size: 120
     },
+    // Size column
     {
-      headerName: 'Status',
-      field: 'status',
-      width: 100,
-      cellRenderer: (params: any) => {
-        const cable = params.data as Cable;
-        const validationStatus = getCableValidationStatus(cable.id);
+      accessorKey: 'size',
+      header: 'Size',
+      size: 100
+    },
+    // Cores column
+    {
+      accessorKey: 'cores',
+      header: 'Cores',
+      size: 80
+    },
+    // From Location column
+    {
+      accessorKey: 'fromLocation',
+      header: 'From',
+      size: 150
+    },
+    // To Location column
+    {
+      accessorKey: 'toLocation',
+      header: 'To',
+      size: 150
+    },
+    // Length column
+    {
+      accessorKey: 'length',
+      header: 'Length (ft)',
+      cell: ({ getValue }) => {
+        const length = getValue() as number;
+        return <span>{length?.toFixed(1) || ''}</span>;
+      },
+      size: 100
+    },
+    // Validation column
+    {
+      id: 'validation',
+      header: 'Status',
+      cell: ({ row }) => {
+        const validationList = validationResults[row.original.id!];
+        if (!validationList || validationList.length === 0) return null;
+        
+        // Show the highest severity issue
+        const hasError = validationList.some(v => v.severity === 'Error');
+        const hasWarning = validationList.some(v => v.severity === 'Warning');
+        
+        const status = hasError ? 'error' : hasWarning ? 'warning' : 'valid';
         return (
           <ValidationIndicator 
-            status={validationStatus}
-            className="text-sm"
+            status={status as any}
           />
         );
-      }
+      },
+      size: 80,
+      enableSorting: false
     },
+    // Actions column
     {
-      headerName: '',
-      field: 'actions',
-      width: 60,
-      pinned: 'right',
-      suppressMovable: true,
-      resizable: false,
-      cellRenderer: (params: any) => {
-        const cable = params.data as Cable;
-        
-        // Don't show actions for empty row
-        if (cable.id === -1) {
-          return null;
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onCableEdit?.(row.original)}
+            className="text-blue-600 hover:text-blue-800"
+            title="Edit cable"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => onCableDelete(row.original.id!)}
+            className="text-red-600 hover:text-red-800"
+            title="Delete cable"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+      size: 100,
+      enableSorting: false,
+      enableColumnFilter: false
+    }
+  ], [onCableEdit, onCableDelete, validationResults]);
+
+  // Create table instance
+  const table = useReactTable({
+    data: filteredCables,
+    columns,
+    enableRowSelection: true,
+    enableMultiRowSelection: true,
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
+    onRowSelectionChange: setRowSelection,
+    onColumnSizingChange: setColumnSizing,
+    onColumnSizingInfoChange: setColumnSizingInfo,
+    state: {
+      rowSelection,
+      columnSizing,
+      columnSizingInfo
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getRowId: (row) => row.id?.toString() || row.tag || Math.random().toString()
+  });
+
+  // Get column keys for selection operations
+  const columnKeys = useMemo(() => 
+    columns.filter(col => 'accessorKey' in col && col.accessorKey).map(col => (col as any).accessorKey as string),
+    [columns]
+  );
+
+  // Update parent selection when row selection changes
+  useEffect(() => {
+    const selectedIds = Object.keys(rowSelection)
+      .filter(id => rowSelection[id])
+      .map(id => parseInt(id))
+      .filter(id => !isNaN(id));
+    onSelectionChange(selectedIds);
+  }, [rowSelection, onSelectionChange]);
+
+  // Validate cables when they change
+  useEffect(() => {
+    const validateCables = async () => {
+      const results: {[key: number]: ValidationResult[]} = {};
+      for (const cable of filteredCables) {
+        if (cable.id) {
+          results[cable.id] = await validationService.validateCable(cable.id);
         }
+      }
+      setValidationResults(results);
+    };
+
+    if (filteredCables.length > 0) {
+      validateCables();
+    }
+  }, [filteredCables]);
+
+  // Cell update function
+  const updateCell = useCallback((rowIndex: number, columnKey: string, value: any, skipUndo = false) => {
+    const cable = filteredCables[rowIndex];
+    if (cable && cable.id) {
+      const oldValue = cable[columnKey as keyof Cable];
+      
+      // Record in undo stack (unless this is part of an undo/redo operation)
+      if (!skipUndo && oldValue !== value) {
+        const operation = {
+          action: 'update' as const,
+          cableId: cable.id,
+          field: columnKey,
+          oldValue,
+          newValue: value,
+          timestamp: Date.now()
+        };
         
-        const menuItems = [
-          { 
-            label: 'Edit', 
-            onClick: () => onCableEdit?.(cable),
-            icon: <Edit2 className="h-4 w-4" />
-          },
-          { 
-            label: 'Delete', 
-            onClick: () => handleDeleteCable(cable),
-            icon: <Trash2 className="h-4 w-4" />,
-            variant: 'danger' as const
-          }
-        ];
-        return <KebabMenu items={menuItems} />;
+        setUndoStack(prev => [...prev, operation].slice(-50)); // Keep last 50 operations
+        setRedoStack([]); // Clear redo stack when new action is performed
+      }
+      
+      onCableUpdate(cable.id, { [columnKey]: value });
+      
+      // Record revision
+      revisionService.trackChange('cable', cable.id, cable.tag, 'update', columnKey, oldValue, value);
+      
+      // Show success message
+      if (!skipUndo) {
+        showSuccess(`Updated ${columnKey} for cable ${cable.tag}`);
       }
     }
-  ], [columnDefinitions, trays, conduits, onCableEdit, handleDeleteCable, getCableValidationStatus]);
+  }, [filteredCables, onCableUpdate, showSuccess]);
 
-  // Custom column creation function that handles tray/conduit assignments
-  const createCustomColumnDef = useCallback((colDef: ColumnDefinition): ColDef => {
-    if (colDef.field === 'trayId') {
-      return {
-        headerName: colDef.headerName,
-        field: colDef.field,
-        width: colDef.width || 100,
-        hide: !colDef.visible,
-        editable: true,
-        cellEditor: 'agSelectCellEditor',
-        cellEditorParams: {
-          values: ['', ...trays.map(t => `${t.tag} (${t.fillPercentage?.toFixed(1) || 0}%)`)]
-        },
-        cellRenderer: (params: any) => {
-          if (!params.value) return '-';
-          const tray = trays.find(t => t.id === params.value);
-          if (!tray) return '-';
-          const fillColor = tray.fillPercentage > 80 ? 'text-red-600' : tray.fillPercentage > 50 ? 'text-yellow-600' : 'text-green-600';
-          return (
-            <span className={`text-sm ${fillColor}`} title={`Fill: ${tray.fillPercentage?.toFixed(1) || 0}%`}>
-              {tray.tag}
-            </span>
-          );
-        },
-        valueSetter: (params: any) => {
-          const value = params.newValue;
-          if (value && value.includes('(')) {
-            const tag = value.split(' (')[0];
-            const tray = trays.find(t => t.tag === tag);
-            params.data.trayId = tray?.id || null;
-          } else {
-            params.data.trayId = null;
-          }
-          return true;
-        }
-      };
-    }
+  // Clipboard operations
+  const handleCopy = useCallback(async () => {
+    if (!selectedRange) return;
     
-    if (colDef.field === 'conduitId') {
-      return {
-        headerName: colDef.headerName,
-        field: colDef.field,
-        width: colDef.width || 100,
-        hide: !colDef.visible,
-        editable: true,
-        cellEditor: 'agSelectCellEditor',
-        cellEditorParams: {
-          values: ['', ...conduits.map(c => `${c.tag} (${c.fillPercentage?.toFixed(1) || 0}%)`)]
-        },
-        cellRenderer: (params: any) => {
-          if (!params.value) return '-';
-          const conduit = conduits.find(c => c.id === params.value);
-          if (!conduit) return '-';
-          const fillColor = conduit.fillPercentage > 80 ? 'text-red-600' : conduit.fillPercentage > 50 ? 'text-yellow-600' : 'text-green-600';
-          return (
-            <span className={`text-sm ${fillColor}`} title={`Fill: ${conduit.fillPercentage?.toFixed(1) || 0}%`}>
-              {conduit.tag}
-            </span>
-          );
-        },
-        valueSetter: (params: any) => {
-          const value = params.newValue;
-          if (value && value.includes('(')) {
-            const tag = value.split(' (')[0];
-            const conduit = conduits.find(c => c.tag === tag);
-            params.data.conduitId = conduit?.id || null;
-          } else {
-            params.data.conduitId = null;
-          }
-          return true;
-        }
-      };
+    try {
+      await copyToClipboard(filteredCables, selectedRange, columnKeys);
+      showSuccess('Copied to clipboard');
+    } catch (error) {
+      console.error('Copy failed:', error);
+      showError('Failed to copy selection');
     }
-    
-    // Use the standard column creation for other fields
-    return createColumnDef(colDef);
-  }, [trays, conduits]);
+  }, [selectedRange, filteredCables, columnKeys, showSuccess, showError]);
 
-  // Dynamic column definitions (replacing the static ones above)
-  const dynamicColumnDefs: ColDef[] = useMemo(() => {
-    if (columnDefinitions.length === 0) return [];
+  const handlePaste = useCallback(async () => {
+    if (!selectedRange) return;
     
-    const visibleColumns = columnService.getVisibleColumns(columnDefinitions);
-    const dynamicColumns = visibleColumns.map(colDef => createCustomColumnDef(colDef));
-    
-    // Add selection column and actions column
-    const columns = [
-      createSelectionColumn(),
-      ...dynamicColumns
-    ];
-    
-    return columns;
-  }, [columnDefinitions, createCustomColumnDef, onCableEdit, handleDeleteCable, getCableValidationStatus]);
-
-  // Default column definition
-  const defaultColDef: ColDef = {
-    resizable: true,
-    sortable: true,
-    filter: true,
-    floatingFilter: true,
-    editable: false,
-    enableRowGroup: false,
-    enablePivot: false,
-    enableValue: false,
-    // Excel-like features - cell text selection is enabled by default in AG-Grid
-    suppressKeyboardEvent: (params) => {
-      // Allow Ctrl+C, Ctrl+V, Ctrl+X, Delete keys
-      const { event } = params;
-      if (event.key === 'c' && event.ctrlKey) return false; // Allow copy
-      if (event.key === 'v' && event.ctrlKey) return false; // Allow paste
-      if (event.key === 'x' && event.ctrlKey) return false; // Allow cut
-      if (event.key === 'Delete') return false; // Allow delete
-      if (event.key === 'F2') return false; // Allow edit mode
-      return false; // Allow all other keys
+    try {
+      const clipboardData = await parseClipboardDataRaw();
+      const { start } = selectedRange;
+      
+      clipboardData.forEach((row, rowOffset) => {
+        const targetRowIndex = start.row + rowOffset;
+        if (targetRowIndex >= filteredCables.length) return;
+        
+        row.forEach((cellValue, colOffset) => {
+          const sourceColIndex = columnKeys.indexOf(start.column);
+          const targetColIndex = sourceColIndex + colOffset;
+          if (targetColIndex >= columnKeys.length) return;
+          
+          const targetColumnKey = columnKeys[targetColIndex];
+          updateCell(targetRowIndex, targetColumnKey, cellValue);
+        });
+      });
+      
+      showSuccess('Pasted successfully');
+    } catch (error) {
+      console.error('Paste failed:', error);
+      showError('Failed to paste data');
     }
-  };
+  }, [selectedRange, filteredCables, columnKeys, updateCell, showSuccess, showError]);
+
+  // Fill operations
+  const handleFillDown = useCallback(() => {
+    if (!selectedRange) return;
+    fillDown(filteredCables, selectedRange, columnKeys, (id, changes) => {
+      const rowIndex = filteredCables.findIndex(cable => cable.id === id);
+      if (rowIndex !== -1) {
+        Object.entries(changes).forEach(([key, value]) => {
+          updateCell(rowIndex, key, value);
+        });
+      }
+    });
+    showSuccess('Filled down successfully');
+  }, [selectedRange, filteredCables, columnKeys, updateCell, showSuccess]);
+
+  const handleFillRight = useCallback(() => {
+    if (!selectedRange) return;
+    fillRight(filteredCables, selectedRange, columnKeys, (id, changes) => {
+      const rowIndex = filteredCables.findIndex(cable => cable.id === id);
+      if (rowIndex !== -1) {
+        Object.entries(changes).forEach(([key, value]) => {
+          updateCell(rowIndex, key, value);
+        });
+      }
+    });
+    showSuccess('Filled right successfully');
+  }, [selectedRange, filteredCables, columnKeys, updateCell, showSuccess]);
+
+  const handleFillSeries = useCallback(() => {
+    if (!selectedRange) return;
+    fillSeries(filteredCables, selectedRange, columnKeys, (id, changes) => {
+      const rowIndex = filteredCables.findIndex(cable => cable.id === id);
+      if (rowIndex !== -1) {
+        Object.entries(changes).forEach(([key, value]) => {
+          updateCell(rowIndex, key, value);
+        });
+      }
+    });
+    showSuccess('Filled series successfully');
+  }, [selectedRange, filteredCables, columnKeys, updateCell, showSuccess]);
+
+  const handleClearContents = useCallback(() => {
+    if (!selectedRange) return;
+    clearContents(filteredCables, selectedRange, columnKeys, (id, changes) => {
+      const rowIndex = filteredCables.findIndex(cable => cable.id === id);
+      if (rowIndex !== -1) {
+        Object.entries(changes).forEach(([key, value]) => {
+          updateCell(rowIndex, key, value);
+        });
+      }
+    });
+    showSuccess('Cleared contents');
+  }, [selectedRange, filteredCables, columnKeys, updateCell, showSuccess]);
+
+  const handleSelectAll = useCallback(() => {
+    selectAll();
+  }, [selectAll]);
+
+  // Cell editing handlers
+  const startEditing = useCallback((rowIndex: number, columnKey: string) => {
+    const cable = filteredCables[rowIndex];
+    if (cable && columnKey in cable) {
+      const currentValue = cable[columnKey as keyof Cable];
+      setEditingCell({ row: rowIndex, column: columnKey });
+      setEditValue(String(currentValue || ''));
+    }
+  }, [filteredCables]);
+
+  const saveEdit = useCallback(() => {
+    if (editingCell) {
+      updateCell(editingCell.row, editingCell.column, editValue);
+      setEditingCell(null);
+      setEditValue('');
+    }
+  }, [editingCell, editValue, updateCell]);
+
+  const cancelEdit = useCallback(() => {
+    setEditingCell(null);
+    setEditValue('');
+  }, []);
+
+  const handleCellDoubleClick = useCallback((rowIndex: number, columnKey: string) => {
+    startEditing(rowIndex, columnKey);
+  }, [startEditing]);
+
+  // Undo/Redo functions
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+
+    const lastOperation = undoStack[undoStack.length - 1];
+    const cable = filteredCables.find(c => c.id === lastOperation.cableId);
+    
+    if (cable) {
+      const rowIndex = filteredCables.indexOf(cable);
+      if (rowIndex >= 0) {
+        // Perform the undo by restoring old value
+        updateCell(rowIndex, lastOperation.field, lastOperation.oldValue, true);
+        
+        // Move operation from undo stack to redo stack
+        setUndoStack(prev => prev.slice(0, -1));
+        setRedoStack(prev => [...prev, lastOperation]);
+        
+        showSuccess('Undid last action');
+      }
+    }
+  }, [undoStack, filteredCables, updateCell, showSuccess]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+
+    const lastUndoneOperation = redoStack[redoStack.length - 1];
+    const cable = filteredCables.find(c => c.id === lastUndoneOperation.cableId);
+    
+    if (cable) {
+      const rowIndex = filteredCables.indexOf(cable);
+      if (rowIndex >= 0) {
+        // Perform the redo by applying new value
+        updateCell(rowIndex, lastUndoneOperation.field, lastUndoneOperation.newValue, true);
+        
+        // Move operation from redo stack back to undo stack
+        setRedoStack(prev => prev.slice(0, -1));
+        setUndoStack(prev => [...prev, lastUndoneOperation]);
+        
+        showSuccess('Redid last action');
+      }
+    }
+  }, [redoStack, filteredCables, updateCell, showSuccess]);
+
+  // Context menu handlers
+  const handleContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      visible: true
+    });
+  }, []);
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  // Bulk operations
+  const handleBulkCalculation = useCallback(async () => {
+    if (selectedCables.length === 0) {
+      showError('Please select cables first');
+      return;
+    }
+
+    setBulkCalculationInProgress(true);
+    try {
+      const results = await calculationService.batchUpdateVoltageDrops(selectedCables);
+      
+      // results is a Map<number, number | null>, where key is cable ID and value is voltage drop %
+      const successCount = Array.from(results.values()).filter(v => v !== null).length;
+      
+      showSuccess(`Updated voltage drop calculations for ${successCount} cables`);
+    } catch (error) {
+      showError('Bulk calculation failed');
+    } finally {
+      setBulkCalculationInProgress(false);
+    }
+  }, [selectedCables, onCableUpdate, showSuccess, showError]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts(table, selectedRange, {
+    onCopy: handleCopy,
+    onPaste: handlePaste,
+    onFillDown: handleFillDown,
+    onFillRight: handleFillRight,
+    onClearContents: handleClearContents,
+    onSelectAll: handleSelectAll,
+    onStartEdit: (rowIndex: number, columnKey: string) => {
+      startEditing(rowIndex, columnKey);
+    },
+    onSaveEdit: saveEdit,
+    onCancelEdit: cancelEdit,
+    onUndo: handleUndo,
+    onRedo: handleRedo
+  });
+
+  // Mouse event handlers for range selection
+  const handleCellMouseDown = useCallback((
+    event: React.MouseEvent,
+    rowIndex: number,
+    columnKey: string
+  ) => {
+    if (event.button === 0) { // Left click only
+      handleMouseDown(rowIndex, columnKey, event);
+    }
+  }, [handleMouseDown]);
+
+  const handleCellMouseMove = useCallback((
+    event: React.MouseEvent,
+    rowIndex: number,
+    columnKey: string
+  ) => {
+    if (isSelecting) {
+      handleMouseMove(rowIndex, columnKey, event);
+    }
+  }, [isSelecting, handleMouseMove]);
+
+  // Global mouse up handler
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isSelecting) {
+        handleMouseUp();
+      }
+    };
+
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isSelecting, handleMouseUp]);
 
   return (
     <div className="h-full flex flex-col">
-      {/* Compact Filter Bar */}
-      <CompactFilterBar
-        columns={columnDefinitions}
-        data={filteredCables.filter(c => c.id !== -1)} // Exclude empty row from filter data
-        onFiltersChange={handleFiltersChange}
+      {/* Filters */}
+      <FilterBar
+        searchTerm={searchTerm}
+        onSearchChange={() => {}} // These are controlled by parent
+        selectedFunction={functionFilter}
+        onFunctionChange={() => {}}
+        selectedVoltage={voltageFilter}
+        onVoltageChange={() => {}}
+        selectedFrom={fromFilter}
+        onFromChange={() => {}}
+        selectedTo={toFilter}
+        onToChange={() => {}}
+        selectedRoute={routeFilter}
+        onRouteChange={() => {}}
+        onClearFilters={() => {}}
       />
 
-      {/* Compact Table Toolbar */}
-      <div className="flex items-center justify-between px-4 py-1.5 bg-white border-b border-gray-200">
-        {/* Progress indicator for voltage drop calculations */}
-        {isCalculatingVoltageDrops && voltageDropProgress && (
-          <div className="flex items-center gap-2 text-xs text-gray-600">
-            <TrendingUp className="h-3 w-3 animate-pulse text-blue-600" />
-            <span>{voltageDropProgress.message}</span>
-            <span className="font-medium">
-              ({voltageDropProgress.completed}/{voltageDropProgress.total})
-            </span>
-          </div>
-        )}
-        
-        {!isCalculatingVoltageDrops && (
-          <div className="flex items-center gap-4 text-xs text-gray-600">
-            {(() => {
-              const calculatedCables = cables.filter(c => c.voltageDropPercentage !== undefined && c.voltageDropPercentage !== null);
-              const compliantCables = calculatedCables.filter(c => (c.voltageDropPercentage || 0) <= 3.0);
-              const warningCables = calculatedCables.filter(c => (c.voltageDropPercentage || 0) > 3.0 && (c.voltageDropPercentage || 0) <= 5.0);
-              const errorCables = calculatedCables.filter(c => (c.voltageDropPercentage || 0) > 5.0);
-              
-              if (calculatedCables.length === 0) return null;
-              
-              return (
-                <>
-                  <span className="text-gray-500">Voltage Drop Summary:</span>
-                  <div className="flex items-center gap-1">
-                    <CheckCircle className="h-3 w-3 text-green-600" />
-                    <span className="text-green-600 font-medium">{compliantCables.length}</span>
-                    <span>Compliant</span>
-                  </div>
-                  {warningCables.length > 0 && (
-                    <div className="flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3 text-yellow-600" />
-                      <span className="text-yellow-600 font-medium">{warningCables.length}</span>
-                      <span>High</span>
-                    </div>
-                  )}
-                  {errorCables.length > 0 && (
-                    <div className="flex items-center gap-1">
-                      <XCircle className="h-3 w-3 text-red-600" />
-                      <span className="text-red-600 font-medium">{errorCables.length}</span>
-                      <span>Exceeds limit</span>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        )}
+      {/* Bulk Actions Bar */}
+      {selectedCables.length > 0 && (
+        <BulkActionsBar
+          selectedCount={selectedCables.length}
+          onBulkEdit={onBulkEdit}
+          onBulkCalculation={handleBulkCalculation}
+          calculationInProgress={bulkCalculationInProgress}
+          onDuplicateCheck={() => setDuplicatesModalOpen(true)}
+        />
+      )}
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCalculateAllVoltageDrops}
-            disabled={isCalculatingVoltageDrops}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Calculate voltage drop for all cables with sufficient data"
+      {/* Table container */}
+      <div className="flex-1 overflow-auto">
+        <div className="tanstack-table-container">
+          <table
+            ref={tableRef}
+            className="tanstack-table"
+            onContextMenu={handleContextMenu}
           >
-            <Calculator className="h-3 w-3" />
-            {isCalculatingVoltageDrops ? 'Calculating...' : 'Calculate Voltage Drops'}
-          </button>
-          
-          <button
-            onClick={handleOpenColumnManager}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            title="Manage Columns & Layout"
-          >
-            <ChevronDown className="h-3 w-3" />
-            Manage Columns
-          </button>
+            {/* Header */}
+            <thead>
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map(header => (
+                    <th
+                      key={header.id}
+                      style={{
+                        width: header.getSize(),
+                        position: 'relative'
+                      }}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                      
+                      {/* Resize handle */}
+                      {header.column.getCanResize() && (
+                        <div
+                          onMouseDown={header.getResizeHandler()}
+                          onTouchStart={header.getResizeHandler()}
+                          className={`resize-handle ${header.column.getIsResizing() ? 'isResizing' : ''}`}
+                          style={{
+                            position: 'absolute',
+                            right: 0,
+                            top: 0,
+                            height: '100%',
+                            width: '5px',
+                            background: header.column.getIsResizing() ? '#2196f3' : 'transparent',
+                            cursor: 'col-resize',
+                            userSelect: 'none',
+                            touchAction: 'none',
+                          }}
+                        />
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+
+            {/* Body */}
+            <tbody>
+              {table.getRowModel().rows.map((row, rowIndex) => (
+                <tr
+                  key={row.id}
+                  className={`${
+                    row.getIsSelected() ? 'row-selected' : ''
+                  }`}
+                >
+                  {row.getVisibleCells().map(cell => {
+                    const columnKey = ('accessorKey' in cell.column.columnDef) ? (cell.column.columnDef as any).accessorKey as string : undefined;
+                    const isSelected = columnKey && isCellSelected(rowIndex, columnKey);
+                    const rangeClass = columnKey ? getCellRangeClass(rowIndex, columnKey) : '';
+                    const isEditing = editingCell?.row === rowIndex && editingCell?.column === columnKey;
+                    const isEditable = columnKey && ['tag', 'description', 'voltage', 'size', 'cores', 'fromLocation', 'toLocation', 'length'].includes(columnKey);
+                    
+                    return (
+                      <td
+                        key={cell.id}
+                        className={`${
+                          isSelected ? 'cell-selected' : ''
+                        } ${rangeClass} ${isEditing ? 'editing' : ''}`}
+                        onMouseDown={(e) => columnKey && handleCellMouseDown(e, rowIndex, columnKey)}
+                        onMouseMove={(e) => columnKey && handleCellMouseMove(e, rowIndex, columnKey)}
+                        onDoubleClick={() => isEditable && columnKey && handleCellDoubleClick(rowIndex, columnKey)}
+                      >
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={saveEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                saveEdit();
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                cancelEdit();
+                              }
+                            }}
+                            className="w-full border-none outline-none bg-transparent"
+                            autoFocus
+                          />
+                        ) : (
+                          flexRender(cell.column.columnDef.cell, cell.getContext())
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* AG-Grid Table - fills all available space */}
-      <div className="flex-1 ag-theme-quartz">
-        <AgGridReact
-          rowData={filteredCables}
-          columnDefs={dynamicColumnDefs.length > 0 ? dynamicColumnDefs : columnDefs}
-          defaultColDef={defaultColDef}
-          onGridReady={onGridReady}
-          onCellValueChanged={onCellValueChanged}
-          onSelectionChanged={onSelectionChanged}
-          rowSelection={{
-            mode: 'multiRow',
-            checkboxes: true,
-            headerCheckbox: true,
-            enableClickSelection: false,
-            copySelectedRows: true,
-            isRowSelectable: (params) => params.data.id !== -1 // Don't allow selection of empty row
-          }}
-          // Excel-like features
-          enableRangeSelection={true}
-          enableRangeHandle={true}
-          fillHandleDirection="xy"
-          suppressCopyRowsToClipboard={false}
-          suppressCopySingleCellRanges={false}
-          copyHeadersToClipboard={false}
-          clipboardDelimiter="\t"
-          // Context menu for Excel-like operations
-          getContextMenuItems={(params) => {
-            const ranges = params.api.getCellRanges() || [];
-            const hasSelection = ranges.length > 0;
-            
-            const result: any[] = [
-              'copy',
-              'paste',
-              'separator',
-              {
-                name: 'Fill Down',
-                disabled: !hasSelection,
-                action: () => {
-                  if (hasSelection) {
-                    fillRange({
-                      api: params.api,
-                      direction: 'down',
-                      ranges
-                    });
-                  }
-                },
-                icon: '<span style="font-size: 12px;">⬇</span>'
-              },
-              {
-                name: 'Fill Right',
-                disabled: !hasSelection,
-                action: () => {
-                  if (hasSelection) {
-                    fillRange({
-                      api: params.api,
-                      direction: 'right',
-                      ranges
-                    });
-                  }
-                },
-                icon: '<span style="font-size: 12px;">➡</span>'
-              },
-              {
-                name: 'Fill Series',
-                disabled: !hasSelection,
-                action: () => {
-                  if (hasSelection) {
-                    fillSeries({
-                      api: params.api,
-                      direction: 'down',
-                      ranges
-                    });
-                  }
-                },
-                icon: '<span style="font-size: 12px;">📈</span>'
-              },
-              {
-                name: 'Clear Contents',
-                disabled: !hasSelection,
-                action: () => {
-                  if (hasSelection) {
-                    clearContents({ api: params.api, ranges });
-                  }
-                },
-                icon: '<span style="font-size: 12px;">🗑</span>'
-              },
-              'separator',
-              'export'
-            ];
-            return result;
-          }}
-          // Cell navigation
-          suppressMovableColumns={false}
-          ensureDomOrder={true}
-          animateRows={true}
-          navigateToNextCell={navigateToNextCell}
-          tabToNextCell={tabToNextCell}
-          getRowId={(params) => params.data.id?.toString() || params.data.tag}
-          getRowClass={getRowClass}
-          noRowsOverlayComponent={() => (
-            <div className="flex items-center justify-center h-32 text-gray-500">
-              <div className="text-center">
-                <div className="text-2xl mb-2">📊</div>
-                <div className="text-sm font-medium mb-1">No cables found</div>
-                <div className="text-xs">Add cables to get started</div>
-              </div>
-            </div>
-          )}
+      {/* Context Menu */}
+      {contextMenu && (
+        <TableContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeContextMenu}
+          onCopy={handleCopy}
+          onPaste={handlePaste}
+          onFillDown={handleFillDown}
+          onFillRight={handleFillRight}
+          onFillSeries={handleFillSeries}
+          onClearContents={handleClearContents}
+          hasSelection={!!selectedRange}
+          canPaste={true}
         />
-      </div>
+      )}
 
-      {/* Bulk Actions Bar - appears when items are selected */}
-      <BulkActionsBar
-        selectedCount={selectedCables.length}
-        entityName="cable"
-        onBulkEdit={onBulkEdit}
-        onBulkDelete={handleBulkDelete}
-        onBulkExport={() => {}} // TODO: implement bulk export
-        onBulkDuplicate={handleBulkDuplicate}
-        onClearSelection={() => onSelectionChange([])}
-        isLoading={false}
-      />
-
-      {/* Duplicate Cables Modal */}
-      <DuplicateCablesModal
-        isOpen={showDuplicateModal}
-        onClose={() => setShowDuplicateModal(false)}
-        onDuplicate={handleDuplicateCables}
-        selectedCables={cables.filter(cable => cable.id && selectedCables.includes(cable.id))}
-        allCables={cables}
-        isLoading={false}
-      />
-
-      {/* Column Manager Modal */}
-      <ColumnManagerModal
-        isOpen={showColumnManager}
-        onClose={handleCloseColumnManager}
-        onApply={handleApplyColumns}
-        currentColumns={columnDefinitions}
-      />
+      {/* Modals */}
+      {duplicatesModalOpen && onDuplicate && (
+        <DuplicateCablesModal
+          isOpen={duplicatesModalOpen}
+          onClose={() => setDuplicatesModalOpen(false)}
+          selectedCables={filteredCables.filter(c => c.id && selectedCables.includes(c.id))}
+          allCables={cables}
+          onDuplicate={onDuplicate}
+        />
+      )}
     </div>
   );
 };

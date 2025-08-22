@@ -84,7 +84,7 @@ export function validateCable(
     ];
 
     const incompatible = incompatibleCombos.find(combo => 
-      combo.function === cable.function && combo.types.includes(cable.cableType)
+      combo.function === cable.function && cable.cableType && combo.types.includes(cable.cableType)
     );
 
     if (incompatible) {

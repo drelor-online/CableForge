@@ -1,23 +1,64 @@
-import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
-import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridReadyEvent, CellValueChangedEvent, SelectionChangedEvent } from 'ag-grid-community';
-import { Conduit, ConduitType } from '../../types';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  ColumnDef,
+  Row,
+  Table as TanStackTable
+} from '@tanstack/react-table';
+import { Conduit, ConduitType, ConduitMaterial } from '../../types';
+import { ValidationResult } from '../../types/validation';
+import { validationService } from '../../services/validation-service';
 import { revisionService } from '../../services/revision-service';
-import { fillCalculationService } from '../../services/fill-calculation-service';
+import { useTableSelection } from '../../hooks/useTableSelection';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { 
+  copyToClipboard, 
+  parseClipboardData,
+  fillDown,
+  fillRight,
+  fillSeries,
+  clearContents 
+} from '../../utils/tanstack-helpers';
+import TableContextMenu from './TableContextMenu';
+import FilterBar from '../layout/FilterBar';
+import StatusIndicator from '../ui/StatusIndicator';
+import ValidationIndicator from '../ui/ValidationIndicator';
 import KebabMenu from '../ui/KebabMenu';
 import BulkActionsBar from './BulkActionsBar';
-import { useUI } from '../../contexts/UIContext';
+// import { useUI } from '../../contexts/UIContext';
+import { Edit2, Trash2, ChevronDown, Zap, TrendingUp, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { ColumnDefinition, columnService } from '../../services/column-service';
+import { FilterCondition, filterService } from '../../services/filter-service';
+import '../../styles/tanstack-table.css';
 
 interface ConduitTableProps {
   conduits: Conduit[];
   onConduitUpdate: (id: number, updates: Partial<Conduit>) => void;
   onConduitDelete: (conduitId: number) => void;
   onConduitEdit?: (conduit: Conduit) => void;
-  onAddConduit: () => void;
-  onAddFromLibrary: () => void;
+  onAddConduit?: () => void;
+  onAddFromLibrary?: () => void;
   onBulkEdit: () => void;
   selectedConduits: number[];
   onSelectionChange: (selectedIds: number[]) => void;
+}
+
+interface EditingCell {
+  row: number;
+  column: string;
+}
+
+interface UndoAction {
+  action: 'update';
+  conduitId: number;
+  field: string;
+  oldValue: any;
+  newValue: any;
+  timestamp: number;
 }
 
 const ConduitTable: React.FC<ConduitTableProps> = ({
@@ -29,603 +70,972 @@ const ConduitTable: React.FC<ConduitTableProps> = ({
   onAddFromLibrary,
   onBulkEdit,
   selectedConduits,
-  onSelectionChange,
+  onSelectionChange
 }) => {
-  const { showConfirm, showSuccess, showError } = useUI();
-  
-  // Search and filter state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredConduits, setFilteredConduits] = useState<Conduit[]>([]);
-  const [filters, setFilters] = useState({
-    conduitType: '',
-    size: '',
-    fillRange: '',
-    location: ''
-  });
-  
-  // Refs for keyboard navigation
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [gridApi, setGridApi] = useState<any>(null);
-  const [isAddingNew, setIsAddingNew] = useState(false);
+  // const { showContextMenu, hideContextMenu } = useUI();
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [columnFilters, setColumnFilters] = useState<FilterCondition[]>([]);
+  const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoAction[]>([]);
+  const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Filter conduits based on search term and filters
+  // Validate conduits
   useEffect(() => {
-    let filtered = [...conduits];
-    
-    // Apply search term filter
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(conduit => {
-        return (
-          conduit.tag?.toLowerCase().includes(searchLower) ||
-          conduit.type?.toLowerCase().includes(searchLower) ||
-          conduit.size?.toLowerCase().includes(searchLower) ||
-          conduit.fromLocation?.toLowerCase().includes(searchLower) ||
-          conduit.toLocation?.toLowerCase().includes(searchLower)
-        );
-      });
-    }
-
-    // Apply conduit type filter
-    if (filters.conduitType) {
-      filtered = filtered.filter(conduit => conduit.type === filters.conduitType);
-    }
-
-    // Apply size filter
-    if (filters.size) {
-      filtered = filtered.filter(conduit => conduit.size === filters.size);
-    }
-
-    // Apply fill range filter
-    if (filters.fillRange) {
-      const [min, max] = filters.fillRange.split('-').map(v => parseFloat(v));
-      filtered = filtered.filter(conduit => {
-        const fill = conduit.fillPercentage || 0;
-        return fill >= min && (max ? fill <= max : true);
-      });
-    }
-
-    // Apply location filter
-    if (filters.location) {
-      const locationLower = filters.location.toLowerCase();
-      filtered = filtered.filter(conduit => 
-        conduit.fromLocation?.toLowerCase().includes(locationLower) ||
-        conduit.toLocation?.toLowerCase().includes(locationLower)
-      );
-    }
-    
-    setFilteredConduits(filtered);
-  }, [conduits, searchTerm, filters]);
-
-  // Handle search input change
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchTerm(value);
-  }, []);
-
-  // Handle filter changes
-  const handleFilterChange = useCallback((filterType: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterType]: value
-    }));
-  }, []);
-
-  // Clear all filters
-  const handleClearFilters = useCallback(() => {
-    setSearchTerm('');
-    setFilters({
-      conduitType: '',
-      size: '',
-      fillRange: '',
-      location: ''
-    });
-  }, []);
-
-  const handleEdit = useCallback((conduit: Conduit) => {
-    if (onConduitEdit) {
-      onConduitEdit(conduit);
-    } else {
-      console.log('Edit conduit:', conduit.tag, '(no handler provided)');
-    }
-  }, [onConduitEdit]);
-
-  const handleDelete = useCallback(async (conduit: Conduit) => {
-    const confirmed = await showConfirm({
-      title: 'Delete Conduit',
-      message: `Are you sure you want to delete conduit ${conduit.tag}? This action cannot be undone.`,
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
-      type: 'danger'
-    });
-
-    if (confirmed) {
-      try {
-        onConduitDelete(conduit.id!);
-        showSuccess(`Conduit ${conduit.tag} deleted successfully`);
-      } catch (error) {
-        showError(`Failed to delete conduit ${conduit.tag}: ${error}`);
-      }
-    }
-  }, [onConduitDelete, showConfirm, showSuccess, showError]);
-
-  // Handle fill recalculation for a specific conduit
-  const handleRecalculateFill = useCallback(async (conduit: Conduit) => {
-    if (!conduit.id) return;
-
-    try {
-      const fillPercentage = await fillCalculationService.recalculateConduitFill(conduit.id);
-      
-      // Update the conduit with new fill percentage
-      onConduitUpdate(conduit.id, { fillPercentage });
-      
-      showSuccess(`Fill recalculated for conduit ${conduit.tag}: ${fillPercentage.toFixed(1)}%`);
-    } catch (error) {
-      showError(`Failed to recalculate fill for conduit ${conduit.tag}: ${error}`);
-    }
-  }, [onConduitUpdate, showSuccess, showError]);
-
-  // Handle batch fill recalculation for all conduits
-  const handleRecalculateAllFills = useCallback(async () => {
-    try {
-      showSuccess('Starting fill recalculation for all conduits...');
-      
-      await fillCalculationService.recalculateAllFills();
-      
-      // Refresh the conduits data from the parent
-      // In a real implementation, this would trigger a data refresh from the parent component
-      showSuccess('Fill calculations completed for all conduits and trays!');
-    } catch (error) {
-      showError(`Failed to recalculate fills: ${error}`);
-    }
-  }, [showSuccess, showError]);
-
-  // Get fill percentage color based on NEC standards
-  const getFillColor = useCallback((fillPercentage: number) => {
-    if (fillPercentage <= 30) return 'bg-green-500';
-    if (fillPercentage <= 40) return 'bg-yellow-500';
-    return 'bg-red-500';
-  }, []);
-
-  // Get standard conduit sizes
-  const getStandardSizes = useCallback((type?: ConduitType) => {
-    const sizes = ['1/2"', '3/4"', '1"', '1-1/4"', '1-1/2"', '2"', '2-1/2"', '3"', '3-1/2"', '4"', '5"', '6"'];
-    return sizes;
-  }, []);
-
-  // Column definitions for Conduit table
-  const columnDefs: ColDef[] = useMemo(() => [
-    {
-      headerName: '',
-      field: 'selected',
-      checkboxSelection: true,
-      headerCheckboxSelection: true,
-      width: 50,
-      pinned: 'left',
-      lockPosition: 'left',
-      suppressMovable: true
-    },
-    {
-      headerName: 'Tag',
-      field: 'tag',
-      width: 120,
-      pinned: 'left',
-      editable: true,
-      cellClass: 'font-mono font-semibold text-primary-600',
-      cellEditor: 'agTextCellEditor'
-    },
-    {
-      headerName: 'Type',
-      field: 'type',
-      width: 100,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: Object.values(ConduitType)
-      },
-      cellRenderer: (params: any): React.ReactElement | string => {
-        if (!params.value) return '-';
-        const colors = {
-          'EMT': 'bg-blue-100 text-blue-800',
-          'RMC': 'bg-gray-100 text-gray-800',
-          'IMC': 'bg-purple-100 text-purple-800',
-          'PVC': 'bg-green-100 text-green-800',
-          'LFNC': 'bg-yellow-100 text-yellow-800',
-          'FMC': 'bg-orange-100 text-orange-800',
-          'Rigid Steel': 'bg-red-100 text-red-800',
-          'Cable Run': 'bg-indigo-100 text-indigo-800',
-          'Cable Ladder': 'bg-pink-100 text-pink-800',
-          'Cable Tray': 'bg-teal-100 text-teal-800'
-        };
-        return (
-          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${colors[params.value as ConduitType] || 'bg-gray-100 text-gray-800'}`}>
-            {params.value}
-          </span>
-        );
-      }
-    },
-    {
-      headerName: 'Size',
-      field: 'size',
-      width: 80,
-      editable: true,
-      cellClass: 'font-mono text-center',
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: (params: any) => ({
-        values: getStandardSizes(params.data?.type)
-      }),
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value || '-'
-    },
-    {
-      headerName: 'Internal Ø',
-      field: 'internalDiameter',
-      width: 100,
-      editable: true,
-      cellClass: 'font-mono text-center',
-      cellEditor: 'agNumberCellEditor',
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value ? `${params.value.toFixed(1)}mm` : '-'
-    },
-    {
-      headerName: 'Fill %',
-      field: 'fillPercentage',
-      width: 120,
-      cellClass: 'text-center',
-      headerClass: 'text-center',
-      cellRenderer: (params: any): React.ReactElement | string => {
-        const fillPercentage = params.value || 0;
-        const maxFill = params.data?.maxFillPercentage || 40;
-        const fillColor = getFillColor(fillPercentage);
-        const isOverfilled = fillPercentage > maxFill;
-        
-        const fillStatus = fillCalculationService.getConduitFillStatus(params.data);
-        
-        return (
-          <div 
-            className="flex items-center justify-center h-full"
-            title={fillStatus.message}
-          >
-            <div className="flex items-center gap-2 w-full">
-              <div className="flex-1 bg-gray-200 rounded-full h-2">
-                <div 
-                  className={`h-2 rounded-full transition-all duration-300 ${fillColor}`}
-                  style={{ width: `${Math.min(fillPercentage, 100)}%` }}
-                />
-              </div>
-              <span className={`text-xs font-semibold ${isOverfilled ? 'text-red-600' : 'text-gray-700'}`}>
-                {fillPercentage.toFixed(1)}%
-              </span>
-              {isOverfilled && (
-                <span className="text-red-500 text-xs" title="Exceeds NEC limit">⚠</span>
-              )}
-              {fillPercentage > maxFill * 0.75 && fillPercentage <= maxFill && (
-                <span className="text-yellow-500 text-xs" title="Approaching fill limit">⚡</span>
-              )}
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      headerName: 'Max Fill %',
-      field: 'maxFillPercentage',
-      width: 90,
-      editable: true,
-      cellClass: 'font-mono text-center',
-      cellEditor: 'agNumberCellEditor',
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value ? `${params.value}%` : '40%'
-    },
-    {
-      headerName: 'From Location',
-      field: 'fromLocation',
-      width: 130,
-      editable: true,
-      cellEditor: 'agTextCellEditor'
-    },
-    {
-      headerName: 'To Location',
-      field: 'toLocation',
-      width: 130,
-      editable: true,
-      cellEditor: 'agTextCellEditor'
-    },
-    {
-      headerName: 'Notes',
-      field: 'notes',
-      width: 150,
-      editable: true,
-      cellEditor: 'agLargeTextCellEditor'
-    }
-  ], [getFillColor, getStandardSizes, handleEdit, handleDelete, handleRecalculateFill]);
-
-  // Grid event handlers
-  const onGridReady = useCallback((params: GridReadyEvent) => {
-    setGridApi(params.api);
-  }, []);
-
-  const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
-    const { data, colDef, newValue, oldValue } = event;
-    const conduit = data as Conduit;
-    
-    if (newValue !== oldValue && conduit.id && colDef.field) {
-      // Track the change in revision history
-      revisionService.trackChange(
-        'conduit',
-        conduit.id,
-        conduit.tag || `Conduit ${conduit.id}`,
-        'update',
-        colDef.field,
-        oldValue,
-        newValue
-      );
-      
-      const updates: Partial<Conduit> = {
-        [colDef.field]: newValue
-      };
-      
-      onConduitUpdate(conduit.id, updates);
-    }
-  }, [onConduitUpdate]);
-
-  const onSelectionChanged = useCallback((event: SelectionChangedEvent) => {
-    const selectedRows = event.api.getSelectedRows();
-    const selectedIds = selectedRows.map((row: Conduit) => row.id!);
-    onSelectionChange(selectedIds);
-  }, [onSelectionChange]);
-
-  // Generate next conduit tag
-  const generateNextConduitTag = useCallback(() => {
-    const existingTags = conduits
-      .map(c => c.tag)
-      .filter(tag => tag?.match(/^CDT-\d+$/))
-      .map(tag => parseInt(tag!.replace('CDT-', '')))
-      .filter(num => !isNaN(num));
-    
-    const nextNumber = existingTags.length > 0 ? Math.max(...existingTags) + 1 : 1;
-    return `CDT-${nextNumber.toString().padStart(3, '0')}`;
+    const validateConduits = async () => {
+      const results = await validationService.validateConduits(conduits);
+      setValidationResults(results);
+    };
+    validateConduits();
   }, [conduits]);
 
-  // Handle inline add conduit
-  const handleInlineAddConduit = useCallback(() => {
-    if (isAddingNew) return;
+  // Define columns
+  const columns: ColumnDef<Conduit>[] = useMemo(() => [
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          checked={table.getIsAllRowsSelected()}
+          onChange={table.getToggleAllRowsSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      size: 40,
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+    {
+      accessorKey: 'tag',
+      header: 'Tag',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'description',
+      header: 'Description',
+      size: 200,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'type',
+      header: 'Type',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as ConduitType;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select...</option>
+              <option value="RIGID_STEEL">Rigid Steel</option>
+              <option value="RIGID_ALUMINUM">Rigid Aluminum</option>
+              <option value="EMT">EMT</option>
+              <option value="PVC">PVC</option>
+              <option value="FLEXIBLE">Flexible</option>
+              <option value="LIQUID_TIGHT">Liquid Tight</option>
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value || '')}
+          >
+            {value ? value.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'tradeSize',
+      header: 'Trade Size',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select...</option>
+              <option value="1/2">1/2"</option>
+              <option value="3/4">3/4"</option>
+              <option value="1">1"</option>
+              <option value="1-1/4">1-1/4"</option>
+              <option value="1-1/2">1-1/2"</option>
+              <option value="2">2"</option>
+              <option value="2-1/2">2-1/2"</option>
+              <option value="3">3"</option>
+              <option value="3-1/2">3-1/2"</option>
+              <option value="4">4"</option>
+              <option value="5">5"</option>
+              <option value="6">6"</option>
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value ? `${value}"` : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'length',
+      header: 'Length (m)',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              step="0.1"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? value.toFixed(1) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'fillPercentage',
+      header: 'Fill %',
+      size: 80,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const maxFill = row.original.maxFillPercentage || 40; // NEC standard for conduit
+        const isOverfilled = value > maxFill;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              min="0"
+              max="100"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className={`cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right ${
+              isOverfilled ? 'text-red-600 font-medium' : ''
+            }`}
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? `${value.toFixed(1)}%` : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'maxFillPercentage',
+      header: 'Max Fill %',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              min="0"
+              max="100"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? `${value.toFixed(1)}%` : '40.0%'}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'material',
+      header: 'Material',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as ConduitMaterial;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select...</option>
+              <option value="STEEL">Steel</option>
+              <option value="ALUMINUM">Aluminum</option>
+              <option value="PVC">PVC</option>
+              <option value="STAINLESS_STEEL">Stainless Steel</option>
+              <option value="FIBERGLASS">Fiberglass</option>
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value || '')}
+          >
+            {value ? value.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'fromLocation',
+      header: 'From',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'toLocation',
+      header: 'To',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'installationType',
+      header: 'Installation',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select...</option>
+              <option value="SURFACE">Surface</option>
+              <option value="EMBEDDED">Embedded</option>
+              <option value="UNDERGROUND">Underground</option>
+              <option value="AERIAL">Aerial</option>
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value || '')}
+          >
+            {value ? value.toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'validation',
+      header: 'Status',
+      size: 80,
+      cell: ({ row }) => {
+        const conduit = row.original;
+        const validation = validationResults.find(v => v.entityId === conduit.id);
+        return <ValidationIndicator validation={validation} />;
+      },
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+    {
+      id: 'actions',
+      header: '',
+      size: 60,
+      cell: ({ row }) => {
+        const conduit = row.original;
+        return (
+          <KebabMenu
+            items={[
+              {
+                icon: <Edit2 className="w-4 h-4" />,
+                label: 'Edit',
+                onClick: () => onConduitEdit?.(conduit)
+              },
+              {
+                icon: <Trash2 className="w-4 h-4" />,
+                label: 'Delete',
+                onClick: () => conduit.id && onConduitDelete(conduit.id),
+                variant: 'danger'
+              }
+            ]}
+          />
+        );
+      },
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+  ], [editingCell, editValue, validationResults, onConduitEdit, onConduitDelete]);
+
+  // Create table instance
+  const table = useReactTable({
+    data: conduits,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    enableRowSelection: true,
+    onRowSelectionChange: (updater) => {
+      const newSelection = typeof updater === 'function' 
+        ? updater(table.getState().rowSelection)
+        : updater;
+      
+      const selectedIds = Object.keys(newSelection)
+        .filter(key => newSelection[key])
+        .map(key => conduits[parseInt(key)]?.id)
+        .filter(id => id !== undefined) as number[];
+      
+      onSelectionChange(selectedIds);
+    },
+    globalFilterFn: 'includesString',
+    state: {
+      globalFilter,
+      rowSelection: selectedConduits.reduce((acc, id) => {
+        const index = conduits.findIndex(conduit => conduit.id === id);
+        if (index !== -1) {
+          acc[index] = true;
+        }
+        return acc;
+      }, {} as Record<string, boolean>)
+    }
+  });
+
+  // Table selection hook
+  const {
+    selectedRows,
+    selectedRange,
+    selectedCells,
+    isSelecting,
+    isRangeSelecting,
+    lastClickedRow,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleRowClick,
+    handleRowMouseEnter,
+    clearSelection,
+    selectAll,
+    isCellSelected,
+    getCellRangeClass,
+    getSelectedData
+  } = useTableSelection({
+    data: conduits,
+    columns: table.getAllColumns().map(col => col.id),
+    onSelectionChange: (selectedIds) => {
+      onSelectionChange(selectedIds);
+    }
+  });
+
+  // Editing functions
+  const handleStartEdit = useCallback((rowIndex: number, columnId: string, currentValue: any) => {
+    setEditingCell({ row: rowIndex, column: columnId });
+    setEditValue(currentValue?.toString() || '');
+  }, []);
+
+  const handleSaveEdit = useCallback(() => {
+    if (!editingCell) return;
     
-    setIsAddingNew(true);
-    const newConduit: Conduit = {
-      tag: generateNextConduitTag(),
-      type: 'EMT' as ConduitType,
-      size: '1"',
-      internalDiameter: 26.6, // 1" EMT internal diameter in mm
-      fillPercentage: 0,
-      maxFillPercentage: 40,
-      fromLocation: '',
-      toLocation: '',
-      notes: '',
-      revisionId: 1,
-      createdAt: new Date(),
-      updatedAt: new Date()
+    const conduit = conduits[editingCell.row];
+    if (!conduit?.id) return;
+    
+    const field = editingCell.column;
+    const oldValue = (conduit as any)[field];
+    let newValue: any = editValue;
+    
+    // Type conversion based on field
+    if (['length', 'fillPercentage', 'maxFillPercentage'].includes(field)) {
+      newValue = editValue ? parseFloat(editValue) : null;
+    }
+    
+    if (oldValue !== newValue) {
+      // Record change for undo
+      const action: UndoAction = {
+        action: 'update',
+        conduitId: conduit.id,
+        field,
+        oldValue,
+        newValue,
+        timestamp: Date.now()
+      };
+      
+      setUndoStack(prev => [...prev.slice(-49), action]);
+      setRedoStack([]);
+      
+      // Track revision
+      revisionService.trackChange('conduit', conduit.id, conduit.tag, 'update', field, oldValue, newValue);
+      
+      // Update the conduit
+      onConduitUpdate(conduit.id, { [field]: newValue });
+    }
+    
+    setEditingCell(null);
+    setEditValue('');
+  }, [editingCell, editValue, conduits, onConduitUpdate]);
+
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingCell(null);
+      setEditValue('');
+    }
+  }, [handleSaveEdit]);
+
+  // Undo/Redo functions
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    
+    const action = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [action, ...prev.slice(0, 49)]);
+    
+    // Revert the change
+    onConduitUpdate(action.conduitId, { [action.field]: action.oldValue });
+  }, [undoStack, onConduitUpdate]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    
+    const action = redoStack[0];
+    setRedoStack(prev => prev.slice(1));
+    setUndoStack(prev => [...prev, action]);
+    
+    // Reapply the change
+    onConduitUpdate(action.conduitId, { [action.field]: action.newValue });
+  }, [redoStack, onConduitUpdate]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts(table, selectedRange, {
+      onCopy: () => {
+        if (selectedRange) {
+          copyToClipboard(conduits, selectedRange, table.getAllColumns());
+        }
+      },
+      onPaste: async () => {
+        if (selectedRange) {
+          try {
+            const clipboardData = await navigator.clipboard.readText();
+            const updates = await parseClipboardData(clipboardData, conduits, selectedRange, table.getAllColumns());
+            
+            updates.forEach(update => {
+              if (update.id) {
+                onConduitUpdate(update.id, update.changes);
+              }
+            });
+          } catch (error) {
+            console.error('Failed to paste:', error);
+          }
+        }
+      },
+      onDelete: () => {
+        if (selectedRange) {
+          clearContents(conduits, selectedRange, table.getAllColumns(), (id, changes) => {
+            onConduitUpdate(id, changes);
+          });
+        }
+      },
+      onFillDown: () => {
+        if (selectedRange) {
+          fillDown(conduits, selectedRange, table.getAllColumns(), (id, changes) => {
+            onConduitUpdate(id, changes);
+          });
+        }
+      },
+      onFillRight: () => {
+        if (selectedRange) {
+          fillRight(conduits, selectedRange, table.getAllColumns(), (id, changes) => {
+            onConduitUpdate(id, changes);
+          });
+        }
+      },
+      onStartEdit: (rowIndex, columnId) => {
+        const conduit = conduits[rowIndex];
+        const currentValue = (conduit as any)[columnId];
+        handleStartEdit(rowIndex, columnId, currentValue);
+      },
+      onUndo: handleUndo,
+      onRedo: handleRedo
+  });
+
+  // Cell mouse handlers for selection
+  const handleCellMouseDown = useCallback((
+    event: React.MouseEvent,
+    rowIndex: number,
+    columnKey: string
+  ) => {
+    if (event.button === 0) { // Left click only
+      handleMouseDown(rowIndex, columnKey, event);
+    }
+  }, [handleMouseDown]);
+
+  const handleCellMouseMove = useCallback((
+    event: React.MouseEvent,
+    rowIndex: number,
+    columnKey: string
+  ) => {
+    if (isSelecting) {
+      handleMouseMove(rowIndex, columnKey, event);
+    }
+  }, [isSelecting, handleMouseMove]);
+
+  // Global mouse up handler
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isSelecting) {
+        handleMouseUp();
+      }
     };
 
-    // Add to filtered conduits for immediate display
-    setFilteredConduits(prev => [newConduit, ...prev]);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isSelecting, handleMouseUp]);
 
-    // Focus on the tag cell after a short delay
-    setTimeout(() => {
-      if (gridApi) {
-        gridApi.setFocusedCell(0, 'tag');
-        gridApi.startEditingCell({ rowIndex: 0, colKey: 'tag' });
-      }
-    }, 100);
-  }, [isAddingNew, generateNextConduitTag, gridApi]);
-
-  // Handle row value change for new conduit
-  const handleRowValueChanged = useCallback((event: CellValueChangedEvent) => {
-    const { data, colDef, newValue, oldValue } = event;
+  // Context menu
+  const handleContextMenu = useCallback((e: React.MouseEvent, rowIndex?: number) => {
+    e.preventDefault();
     
-    if (newValue !== oldValue) {
-      // If this is a new conduit (no id), create it
-      if (!data.id && isAddingNew) {
-        const conduitData: Conduit = {
-          ...data,
-          [colDef.field!]: newValue,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        
-        // Save to database - use onConduitUpdate with special id -1 to indicate new record
-        onConduitUpdate(-1, conduitData);
-        setIsAddingNew(false);
-        
-        // Remove the temporary row from filtered data since it will be added properly via props
-        setFilteredConduits(prev => prev.filter((_, index) => index !== 0 || prev[0].id));
-      } else if (data.id) {
-        // Existing conduit, update normally
-        const updates: Partial<Conduit> = {
-          [colDef.field!]: newValue
-        };
-        onConduitUpdate(data.id, updates);
+    const menuItems = [
+      {
+        label: 'Copy',
+        action: () => {
+          if (selectedRange) {
+            copyToClipboard(conduits, selectedRange, table.getAllColumns());
+          }
+        },
+        disabled: !selectedRange
+      },
+      {
+        label: 'Paste',
+        action: async () => {
+          if (selectedRange) {
+            try {
+              const clipboardData = await navigator.clipboard.readText();
+              const updates = await parseClipboardData(clipboardData, conduits, selectedRange, table.getAllColumns());
+              
+              updates.forEach(update => {
+                if (update.id) {
+                  onConduitUpdate(update.id, update.changes);
+                }
+              });
+            } catch (error) {
+              console.error('Failed to paste:', error);
+            }
+          }
+        },
+        disabled: !selectedRange
+      },
+      { type: 'separator' },
+      {
+        label: 'Fill Down',
+        action: () => {
+          if (selectedRange) {
+            fillDown(conduits, selectedRange, table.getAllColumns(), (id, changes) => {
+              onConduitUpdate(id, changes);
+            });
+          }
+        },
+        disabled: !selectedRange
+      },
+      {
+        label: 'Fill Right',
+        action: () => {
+          if (selectedRange) {
+            fillRight(conduits, selectedRange, table.getAllColumns(), (id, changes) => {
+              onConduitUpdate(id, changes);
+            });
+          }
+        },
+        disabled: !selectedRange
+      },
+      { type: 'separator' },
+      {
+        label: 'Add Conduit',
+        action: onAddConduit
       }
+    ];
+    
+    if (onAddFromLibrary) {
+      menuItems.push({
+        label: 'Add from Library',
+        action: onAddFromLibrary
+      });
     }
-  }, [isAddingNew, onConduitUpdate]);
+    
+    if (rowIndex !== undefined) {
+      const conduit = conduits[rowIndex];
+      menuItems.push(
+        { type: 'separator' },
+        {
+          label: 'Edit Conduit',
+          action: () => onConduitEdit?.(conduit)
+        },
+        {
+          label: 'Delete Conduit',
+          action: () => conduit.id && onConduitDelete(conduit.id)
+        }
+      );
+    }
+    
+    // Context menu functionality removed - can be added later if needed
+    console.log('Context menu requested with items:', menuItems);
+  }, [selectedRange, conduits, table, onConduitUpdate, onAddConduit, onAddFromLibrary, onConduitEdit, onConduitDelete]);
+
+  const selectedCount = Object.keys(table.getState().rowSelection).length;
+  const hasSelection = selectedCount > 0;
 
   return (
     <div className="flex flex-col h-full">
-      {/* Search and Filter Bar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-3">
-          {/* Search Field */}
-          <div className="flex-1 max-w-80">
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search conduits..."
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Filter Dropdowns */}
-          <select
-            value={filters.conduitType}
-            onChange={(e) => handleFilterChange('conduitType', e.target.value)}
-            className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-gray-600"
-          >
-            <option value="">All Types</option>
-            {Object.values(ConduitType).map(type => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
-
-          <select
-            value={filters.fillRange}
-            onChange={(e) => handleFilterChange('fillRange', e.target.value)}
-            className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-gray-600"
-          >
-            <option value="">All Fill %</option>
-            <option value="0-30">0-30% (Safe)</option>
-            <option value="30-40">30-40% (Near Limit)</option>
-            <option value="40-100">40%+ (Overfilled)</option>
-          </select>
-
-          {/* Clear Filters */}
-          {(searchTerm || Object.values(filters).some(v => v)) && (
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">Conduits ({conduits.length})</h2>
+          {hasSelection && (
+            <span className="text-sm text-gray-500">
+              {selectedCount} selected
+            </span>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {onAddConduit && (
             <button
-              onClick={handleClearFilters}
-              className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+              onClick={onAddConduit}
+              className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              Clear
+              Add Conduit
             </button>
           )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-2 ml-auto">
+          {onAddFromLibrary && (
             <button
-              onClick={handleRecalculateAllFills}
-              className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700"
-              title="Recalculate fill percentages for all conduits and trays"
+              onClick={onAddFromLibrary}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              Recalculate All Fills
+              Add from Library
             </button>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Bulk Actions Bar */}
-      {selectedConduits.length > 0 && (
+      {/* Bulk Actions */}
+      {hasSelection && (
         <BulkActionsBar
-          selectedCount={selectedConduits.length}
-          entityName="conduit"
+          selectedCount={selectedCount}
           onBulkEdit={onBulkEdit}
-          onBulkDelete={async () => {
-            const confirmed = await showConfirm({
-              title: 'Delete Conduits',
-              message: `Are you sure you want to delete ${selectedConduits.length} selected conduits? This action cannot be undone.`,
-              confirmText: 'Delete All',
-              cancelText: 'Cancel',
-              type: 'danger'
-            });
-
-            if (confirmed) {
-              try {
-                for (const conduitId of selectedConduits) {
-                  onConduitDelete(conduitId);
-                }
-                showSuccess(`Successfully deleted ${selectedConduits.length} conduits`);
-                onSelectionChange([]);
-              } catch (error) {
-                showError(`Failed to delete conduits: ${error}`);
-              }
-            }
-          }}
-          onBulkExport={() => {
-            // Export only selected conduits
-            const selectedConduitData = filteredConduits.filter(conduit => selectedConduits.includes(conduit.id!));
+          onBulkDelete={() => {
+            const selectedIds = Object.keys(table.getState().rowSelection)
+              .filter(key => table.getState().rowSelection[key])
+              .map(key => conduits[parseInt(key)]?.id)
+              .filter(id => id !== undefined) as number[];
             
-            try {
-              const headers = [
-                'Tag',
-                'Type',
-                'Size',
-                'Internal Diameter (mm)',
-                'Fill Percentage',
-                'Max Fill Percentage',
-                'From Location',
-                'To Location',
-                'Notes'
-              ];
-
-              const csvContent = [
-                headers.join(','),
-                ...selectedConduitData.map(conduit => [
-                  `"${conduit.tag || ''}"`,
-                  `"${conduit.type || ''}"`,
-                  `"${conduit.size || ''}"`,
-                  conduit.internalDiameter || '',
-                  conduit.fillPercentage || '',
-                  conduit.maxFillPercentage || '',
-                  `"${conduit.fromLocation || ''}"`,
-                  `"${conduit.toLocation || ''}"`,
-                  `"${conduit.notes?.replace(/"/g, '""') || ''}"`
-                ].join(','))
-              ].join('\n');
-
-              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-              const link = document.createElement('a');
-              
-              if (link.download !== undefined) {
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                
-                const now = new Date();
-                const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
-                const filename = `selected-conduits-${timestamp}.csv`;
-                
-                link.setAttribute('download', filename);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                showSuccess(`Exported ${selectedConduitData.length} selected conduits to ${filename}`);
-              }
-            } catch (error) {
-              console.error('Export failed:', error);
-              showError(`Export failed: ${error}`);
-            }
-          }}
-          onClearSelection={() => {
-            onSelectionChange([]);
+            selectedIds.forEach(id => onConduitDelete(id));
           }}
         />
       )}
 
-      {/* AG-Grid Table */}
-      <div className="flex-1 ag-theme-alpine">
-        <AgGridReact
-          rowData={filteredConduits}
-          columnDefs={columnDefs}
-          defaultColDef={{
-            sortable: true,
-            filter: true,
-            resizable: true,
-            cellClass: 'flex items-center'
-          }}
-          rowSelection="multiple"
-          suppressRowClickSelection={true}
-          onGridReady={onGridReady}
-          onCellValueChanged={handleRowValueChanged}
-          onSelectionChanged={onSelectionChanged}
-          getRowId={(params) => params.data.id?.toString() || params.data.tag || Math.random().toString()}
-          headerHeight={32}
-          rowHeight={40}
-          animateRows={true}
-          pagination={true}
-          paginationPageSize={50}
-          suppressCellFocus={true}
-          enterNavigatesVertically={true}
-          enableCellTextSelection={true}
-        />
+      {/* Filters */}
+      <FilterBar
+        globalFilter={globalFilter}
+        onGlobalFilterChange={setGlobalFilter}
+        columnFilters={columnFilters}
+        onColumnFiltersChange={setColumnFilters}
+        columns={table.getAllColumns().map(col => ({
+          id: col.id,
+          label: typeof col.columnDef.header === 'string' ? col.columnDef.header : col.id
+        }))}
+      />
+
+      {/* Table */}
+      <div className="flex-1 overflow-hidden">
+        <div 
+          ref={tableRef}
+          className="h-full overflow-auto"
+          // onContextMenu={(e) => handleContextMenu(e)}
+        >
+          <table className="tanstack-table">
+            <thead>
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map(header => (
+                    <th
+                      key={header.id}
+                      style={{ width: header.getSize() }}
+                      className={header.column.getCanSort() ? 'sortable' : ''}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <div className="flex items-center gap-2">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {header.column.getIsSorted() && (
+                          <ChevronDown 
+                            className={`w-4 h-4 transition-transform ${
+                              header.column.getIsSorted() === 'desc' ? 'rotate-180' : ''
+                            }`}
+                          />
+                        )}
+                      </div>
+                      {header.column.getCanResize() && (
+                        <div
+                          className="resize-handle"
+                          onMouseDown={header.getResizeHandler()}
+                        />
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map(row => (
+                <tr
+                  key={row.id}
+                  className={`
+                    ${row.getIsSelected() ? 'selected' : ''}
+                    ${selectedRows.has(parseInt(row.id)) ? 'table-row-selected' : ''}
+                    ${isRangeSelecting && selectedRange && 
+                      parseInt(row.id) >= Math.min(selectedRange.start.row, selectedRange.end.row) &&
+                      parseInt(row.id) <= Math.max(selectedRange.start.row, selectedRange.end.row)
+                      ? 'table-row-range' : ''}
+                  `}
+                  onClick={(e) => handleRowClick(e, parseInt(row.id))}
+                  onMouseEnter={() => handleRowMouseEnter(parseInt(row.id))}
+                  // onContextMenu={(e) => handleContextMenu(e, parseInt(row.id)))
+                >
+                  {row.getVisibleCells().map(cell => {
+                    const rowIndex = parseInt(row.id);
+                    const columnKey = ('accessorKey' in cell.column.columnDef) ? (cell.column.columnDef as any).accessorKey as string : undefined;
+                    const isSelected = columnKey && isCellSelected(rowIndex, columnKey);
+                    const rangeClass = columnKey ? getCellRangeClass(rowIndex, columnKey) : '';
+                    
+                    return (
+                      <td 
+                        key={cell.id}
+                        className={`relative ${rangeClass} ${isSelected ? 'bg-blue-100' : ''}`}
+                        onMouseDown={(e) => columnKey && handleCellMouseDown(e, rowIndex, columnKey)}
+                        onMouseMove={(e) => columnKey && handleCellMouseMove(e, rowIndex, columnKey)}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          
+          {table.getRowModel().rows.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+              <Zap className="w-12 h-12 mb-4 text-gray-400" />
+              <h3 className="text-lg font-medium mb-2">No Conduits</h3>
+              <p className="text-sm text-center mb-4">
+                Get started by adding your first conduit run.
+              </p>
+              {onAddConduit && (
+                <button
+                  onClick={onAddConduit}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                >
+                  Add Conduit
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

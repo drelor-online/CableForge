@@ -7,12 +7,15 @@ import { theme, colors } from '../../theme';
 interface BulkActionsBarProps {
   selectedCount: number;
   entityName?: string;
-  onBulkEdit: () => void;
-  onBulkDelete: () => void;
-  onBulkExport: () => void;
+  onBulkEdit?: () => void;
+  onBulkDelete?: () => void;
+  onBulkExport?: () => void;
   onBulkValidate?: () => void;
   onBulkDuplicate?: () => void;
-  onClearSelection: () => void;
+  onBulkCalculation?: () => Promise<void>;
+  onDuplicateCheck?: () => void;
+  onClearSelection?: () => void;
+  calculationInProgress?: boolean;
   isLoading?: boolean;
 }
 
@@ -24,7 +27,10 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   onBulkExport,
   onBulkValidate,
   onBulkDuplicate,
+  onBulkCalculation,
+  onDuplicateCheck,
   onClearSelection,
+  calculationInProgress = false,
   isLoading = false
 }) => {
   if (selectedCount === 0) return null;
@@ -125,6 +131,40 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
                 }}
               >
                 Duplicate
+              </Button>
+            )}
+
+            {onBulkCalculation && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onBulkCalculation}
+                disabled={isLoading || calculationInProgress}
+                style={{
+                  color: colors.text.inverse,
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  fontSize: theme.typography.fontSize.xs
+                }}
+              >
+                {calculationInProgress ? 'Calculating...' : 'Calculate'}
+              </Button>
+            )}
+
+            {onDuplicateCheck && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDuplicateCheck}
+                disabled={isLoading}
+                style={{
+                  color: colors.text.inverse,
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  fontSize: theme.typography.fontSize.xs
+                }}
+              >
+                Check Duplicates
               </Button>
             )}
 

@@ -1,22 +1,64 @@
-import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
-import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridReadyEvent, CellValueChangedEvent, SelectionChangedEvent } from 'ag-grid-community';
-import { Load, LoadType, StarterType, ProtectionType } from '../../types';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  ColumnDef,
+  Row,
+  Table as TanStackTable
+} from '@tanstack/react-table';
+import { Load } from '../../types';
+import { ValidationResult } from '../../types/validation';
+import { validationService } from '../../services/validation-service';
 import { revisionService } from '../../services/revision-service';
+import { useTableSelection } from '../../hooks/useTableSelection';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { 
+  copyToClipboard, 
+  parseClipboardData,
+  fillDown,
+  fillRight,
+  fillSeries,
+  clearContents 
+} from '../../utils/tanstack-helpers';
+import TableContextMenu from './TableContextMenu';
+import FilterBar from '../layout/FilterBar';
+import StatusIndicator from '../ui/StatusIndicator';
+import ValidationIndicator from '../ui/ValidationIndicator';
 import KebabMenu from '../ui/KebabMenu';
 import BulkActionsBar from './BulkActionsBar';
-import { useUI } from '../../contexts/UIContext';
+// import { useUI } from '../../contexts/UIContext';
+import { Edit2, Trash2, ChevronDown, Zap, TrendingUp, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { ColumnDefinition, columnService } from '../../services/column-service';
+import { FilterCondition, filterService } from '../../services/filter-service';
+import '../../styles/tanstack-table.css';
 
 interface LoadTableProps {
   loads: Load[];
   onLoadUpdate: (id: number, updates: Partial<Load>) => void;
   onLoadDelete: (loadId: number) => void;
   onLoadEdit?: (load: Load) => void;
-  onAddLoad: () => void;
-  onAddFromLibrary: () => void;
+  onAddLoad?: () => void;
+  onAddFromLibrary?: () => void;
   onBulkEdit: () => void;
   selectedLoads: number[];
   onSelectionChange: (selectedIds: number[]) => void;
+}
+
+interface EditingCell {
+  row: number;
+  column: string;
+}
+
+interface UndoAction {
+  action: 'update';
+  loadId: number;
+  field: string;
+  oldValue: any;
+  newValue: any;
+  timestamp: number;
 }
 
 const LoadTable: React.FC<LoadTableProps> = ({
@@ -28,596 +70,812 @@ const LoadTable: React.FC<LoadTableProps> = ({
   onAddFromLibrary,
   onBulkEdit,
   selectedLoads,
-  onSelectionChange,
+  onSelectionChange
 }) => {
-  const { showConfirm, showSuccess, showError } = useUI();
-  
-  // Search and filter state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredLoads, setFilteredLoads] = useState<Load[]>([]);
-  const [filters, setFilters] = useState({
-    loadType: '',
-    voltage: '',
-    powerRange: '',
-    starter: ''
-  });
-  
-  // Refs for keyboard navigation
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [gridApi, setGridApi] = useState<any>(null);
-  const [isAddingNew, setIsAddingNew] = useState(false);
+  // const { showContextMenu, hideContextMenu } = useUI();
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [columnFilters, setColumnFilters] = useState<FilterCondition[]>([]);
+  const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoAction[]>([]);
+  const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Filter loads based on search term and filters
+  // Validate loads
   useEffect(() => {
-    let filtered = [...loads];
-    
-    // Apply search term filter
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(load => {
-        return (
-          load.tag?.toLowerCase().includes(searchLower) ||
-          load.description?.toLowerCase().includes(searchLower) ||
-          load.loadType?.toLowerCase().includes(searchLower) ||
-          load.feederCable?.toLowerCase().includes(searchLower)
-        );
-      });
-    }
-
-    // Apply load type filter
-    if (filters.loadType) {
-      filtered = filtered.filter(load => load.loadType === filters.loadType);
-    }
-
-    // Apply voltage filter
-    if (filters.voltage) {
-      const voltageNum = parseFloat(filters.voltage);
-      filtered = filtered.filter(load => load.voltage === voltageNum);
-    }
-
-    // Apply power range filter
-    if (filters.powerRange) {
-      const [min, max] = filters.powerRange.split('-').map(v => parseFloat(v));
-      filtered = filtered.filter(load => {
-        const power = load.powerKw || (load.powerHp ? load.powerHp * 0.746 : 0);
-        return power >= min && (max ? power <= max : true);
-      });
-    }
-
-    // Apply starter filter
-    if (filters.starter) {
-      filtered = filtered.filter(load => load.starterType === filters.starter);
-    }
-    
-    setFilteredLoads(filtered);
-  }, [loads, searchTerm, filters]);
-
-  // Handle search input change
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchTerm(value);
-  }, []);
-
-  // Handle filter changes
-  const handleFilterChange = useCallback((filterType: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterType]: value
-    }));
-  }, []);
-
-  // Clear all filters
-  const handleClearFilters = useCallback(() => {
-    setSearchTerm('');
-    setFilters({
-      loadType: '',
-      voltage: '',
-      powerRange: '',
-      starter: ''
-    });
-  }, []);
-
-  const handleEdit = useCallback((load: Load) => {
-    if (onLoadEdit) {
-      onLoadEdit(load);
-    } else {
-      console.log('Edit load:', load.tag, '(no handler provided)');
-    }
-  }, [onLoadEdit]);
-
-  const handleDelete = useCallback(async (load: Load) => {
-    const confirmed = await showConfirm({
-      title: 'Delete Load',
-      message: `Are you sure you want to delete load ${load.tag}? This action cannot be undone.`,
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
-      type: 'danger'
-    });
-
-    if (confirmed) {
-      try {
-        onLoadDelete(load.id!);
-        showSuccess(`Load ${load.tag} deleted successfully`);
-      } catch (error) {
-        showError(`Failed to delete load ${load.tag}: ${error}`);
-      }
-    }
-  }, [onLoadDelete, showConfirm, showSuccess, showError]);
-
-  // Power display helper
-  const formatPower = useCallback((load: Load) => {
-    if (load.powerKw && load.powerHp) {
-      return `${load.powerKw} kW (${load.powerHp} HP)`;
-    } else if (load.powerKw) {
-      return `${load.powerKw} kW`;
-    } else if (load.powerHp) {
-      return `${load.powerHp} HP`;
-    }
-    return '-';
-  }, []);
-
-  // Column definitions for Load table
-  const columnDefs: ColDef[] = useMemo(() => [
-    {
-      headerName: '',
-      field: 'selected',
-      checkboxSelection: true,
-      headerCheckboxSelection: true,
-      width: 50,
-      pinned: 'left',
-      lockPosition: 'left',
-      suppressMovable: true
-    },
-    {
-      headerName: 'Tag',
-      field: 'tag',
-      width: 120,
-      pinned: 'left',
-      editable: true,
-      cellClass: 'font-mono font-semibold text-primary-600',
-      cellEditor: 'agTextCellEditor'
-    },
-    {
-      headerName: 'Description',
-      field: 'description',
-      width: 200,
-      pinned: 'left',
-      editable: true,
-      cellEditor: 'agTextCellEditor'
-    },
-    {
-      headerName: 'Type',
-      field: 'loadType',
-      width: 100,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: Object.values(LoadType)
-      },
-      cellRenderer: (params: any): React.ReactElement | string => {
-        if (!params.value) return '-';
-        const colors = {
-          'Motor': 'bg-blue-100 text-blue-800',
-          'Lighting': 'bg-yellow-100 text-yellow-800',
-          'Heating': 'bg-red-100 text-red-800',
-          'Power': 'bg-green-100 text-green-800',
-          'Variable': 'bg-purple-100 text-purple-800',
-          'Other': 'bg-gray-100 text-gray-800'
-        };
-        return (
-          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${colors[params.value as LoadType] || 'bg-gray-100 text-gray-800'}`}>
-            {params.value}
-          </span>
-        );
-      }
-    },
-    {
-      headerName: 'Power',
-      field: 'power',
-      width: 140,
-      cellClass: 'font-mono text-center',
-      headerClass: 'text-center',
-      valueGetter: (params: any) => formatPower(params.data),
-      cellRenderer: (params: any): React.ReactElement | string => {
-        const load = params.data as Load;
-        if (load.powerKw || load.powerHp) {
-          return (
-            <div className="text-center">
-              <div className="font-semibold">{formatPower(load)}</div>
-              {load.connectedLoadKw && (
-                <div className="text-xs text-gray-500">
-                  Connected: {load.connectedLoadKw.toFixed(1)} kW
-                </div>
-              )}
-            </div>
-          );
-        }
-        return '-';
-      }
-    },
-    {
-      headerName: 'Voltage',
-      field: 'voltage',
-      width: 80,
-      editable: true,
-      cellClass: 'font-mono text-center',
-      cellEditor: 'agNumberCellEditor',
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value ? `${params.value}V` : '-'
-    },
-    {
-      headerName: 'Current',
-      field: 'current',
-      width: 80,
-      editable: true,
-      cellClass: 'font-mono text-center',
-      cellEditor: 'agNumberCellEditor',
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value ? `${params.value.toFixed(1)}A` : '-',
-      cellRenderer: (params: any): React.ReactElement | string => {
-        const current = params.value;
-        if (current) {
-          let className = 'font-mono text-center ';
-          if (current > 100) {
-            className += 'text-red-600 font-semibold';
-          } else if (current > 50) {
-            className += 'text-orange-600';
-          } else {
-            className += 'text-gray-900';
-          }
-          return `<div class="${className}">${current.toFixed(1)}A</div>`;
-        }
-        return '-';
-      }
-    },
-    {
-      headerName: 'PF',
-      field: 'powerFactor',
-      width: 60,
-      editable: true,
-      cellClass: 'font-mono text-center',
-      cellEditor: 'agNumberCellEditor',
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value ? params.value.toFixed(2) : '-'
-    },
-    {
-      headerName: 'Demand kW',
-      field: 'demandLoadKw',
-      width: 100,
-      cellClass: 'font-mono text-center',
-      headerClass: 'text-center',
-      valueFormatter: (params: any) => params.value ? `${params.value.toFixed(1)} kW` : '-'
-    },
-    {
-      headerName: 'Feeder Cable',
-      field: 'feederCable',
-      width: 120,
-      editable: true,
-      cellEditor: 'agTextCellEditor',
-      cellClass: 'font-mono'
-    },
-    {
-      headerName: 'Starter',
-      field: 'starterType',
-      width: 100,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: Object.values(StarterType)
-      }
-    },
-    {
-      headerName: 'Protection',
-      field: 'protectionType',
-      width: 100,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: Object.values(ProtectionType)
-      }
-    },
-    {
-      headerName: 'Notes',
-      field: 'notes',
-      width: 150,
-      editable: true,
-      cellEditor: 'agLargeTextCellEditor'
-    }
-  ], [formatPower, handleEdit, handleDelete]);
-
-  // Grid event handlers
-  const onGridReady = useCallback((params: GridReadyEvent) => {
-    setGridApi(params.api);
-  }, []);
-
-  const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
-    const { data, colDef, newValue, oldValue } = event;
-    const load = data as Load;
-    
-    if (newValue !== oldValue && load.id && colDef.field) {
-      // Track the change in revision history
-      revisionService.trackChange(
-        'load',
-        load.id,
-        load.tag || `Load ${load.id}`,
-        'update',
-        colDef.field,
-        oldValue,
-        newValue
-      );
-      
-      const updates: Partial<Load> = {
-        [colDef.field]: newValue
-      };
-      
-      onLoadUpdate(load.id, updates);
-    }
-  }, [onLoadUpdate]);
-
-  const onSelectionChanged = useCallback((event: SelectionChangedEvent) => {
-    const selectedRows = event.api.getSelectedRows();
-    const selectedIds = selectedRows.map((row: Load) => row.id!);
-    onSelectionChange(selectedIds);
-  }, [onSelectionChange]);
-
-  // Generate next load tag
-  const generateNextLoadTag = useCallback(() => {
-    const existingTags = loads
-      .map(l => l.tag)
-      .filter(tag => tag?.match(/^L-\d+$/))
-      .map(tag => parseInt(tag!.replace('L-', '')))
-      .filter(num => !isNaN(num));
-    
-    const nextNumber = existingTags.length > 0 ? Math.max(...existingTags) + 1 : 1;
-    return `L-${nextNumber.toString().padStart(3, '0')}`;
+    const validateLoads = async () => {
+      const results = await validationService.validateLoads(loads);
+      setValidationResults(results);
+    };
+    validateLoads();
   }, [loads]);
 
-  // Handle inline add load
-  const handleInlineAddLoad = useCallback(() => {
-    if (isAddingNew) return;
-    
-    setIsAddingNew(true);
-    const newLoad: Load = {
-      tag: generateNextLoadTag(),
-      description: '',
-      loadType: 'Motor',
-      voltage: 480,
-      current: 0,
-      powerKw: 0,
-      powerHp: 0,
-      efficiency: 85,
-      powerFactor: 0.85,
-      starterType: 'Direct Online',
-      protectionType: 'Overload + Short Circuit',
-      notes: '',
-      revisionId: 1,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    // Add to filtered loads for immediate display
-    setFilteredLoads(prev => [newLoad, ...prev]);
-
-    // Focus on the tag cell after a short delay
-    setTimeout(() => {
-      if (gridApi) {
-        gridApi.setFocusedCell(0, 'tag');
-        gridApi.startEditingCell({ rowIndex: 0, colKey: 'tag' });
-      }
-    }, 100);
-  }, [isAddingNew, generateNextLoadTag, gridApi]);
-
-  // Handle row value change for new load
-  const handleRowValueChanged = useCallback((event: CellValueChangedEvent) => {
-    const { data, colDef, newValue, oldValue } = event;
-    
-    if (newValue !== oldValue) {
-      // If this is a new load (no id), create it
-      if (!data.id && isAddingNew) {
-        const loadData: Load = {
-          ...data,
-          [colDef.field!]: newValue,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
+  // Define columns
+  const columns: ColumnDef<Load>[] = useMemo(() => [
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          checked={table.getIsAllRowsSelected()}
+          onChange={table.getToggleAllRowsSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      size: 40,
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+    {
+      accessorKey: 'tag',
+      header: 'Tag',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
         
-        // Save to database - use onLoadUpdate with special id -1 to indicate new record
-        onLoadUpdate(-1, loadData);
-        setIsAddingNew(false);
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
         
-        // Remove the temporary row from filtered data since it will be added properly via props
-        setFilteredLoads(prev => prev.filter((_, index) => index !== 0 || prev[0].id));
-      } else if (data.id) {
-        // Existing load, update normally
-        const updates: Partial<Load> = {
-          [colDef.field!]: newValue
-        };
-        onLoadUpdate(data.id, updates);
-      }
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'description',
+      header: 'Description',
+      size: 200,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'loadType',
+      header: 'Load Type',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select...</option>
+              <option value="MOTOR">Motor</option>
+              <option value="HEATER">Heater</option>
+              <option value="LIGHTING">Lighting</option>
+              <option value="GENERAL">General</option>
+              <option value="UPS">UPS</option>
+              <option value="HVAC">HVAC</option>
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value || '')}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'powerKw',
+      header: 'Power (kW)',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              step="0.01"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? value.toFixed(2) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'powerHp',
+      header: 'Power (HP)',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              step="0.01"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? value.toFixed(2) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'voltage',
+      header: 'Voltage (V)',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'current',
+      header: 'Current (A)',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              step="0.01"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? value.toFixed(2) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'powerFactor',
+      header: 'Power Factor',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? value.toFixed(2) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'efficiency',
+      header: 'Efficiency (%)',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              step="0.1"
+              min="0"
+              max="100"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? `${value.toFixed(1)}%` : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'demandFactor',
+      header: 'Demand Factor',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              step="0.01"
+              min="0"
+              max="1"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? value.toFixed(2) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'feederCable',
+      header: 'Feeder Cable',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'validation',
+      header: 'Status',
+      size: 80,
+      cell: ({ row }) => {
+        const load = row.original;
+        const validation = validationResults.find(v => v.entityId === load.id);
+        return <ValidationIndicator validation={validation} />;
+      },
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+    {
+      id: 'actions',
+      header: '',
+      size: 60,
+      cell: ({ row }) => {
+        const load = row.original;
+        return (
+          <KebabMenu
+            items={[
+              {
+                icon: <Edit2 className="w-4 h-4" />,
+                label: 'Edit',
+                onClick: () => onLoadEdit?.(load)
+              },
+              {
+                icon: <Trash2 className="w-4 h-4" />,
+                label: 'Delete',
+                onClick: () => load.id && onLoadDelete(load.id),
+                variant: 'danger'
+              }
+            ]}
+          />
+        );
+      },
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+  ], [editingCell, editValue, validationResults, onLoadEdit, onLoadDelete]);
+
+  // Table selection hook
+  const {
+    selectedRows,
+    selectedRange,
+    isRangeSelecting,
+    lastClickedRow,
+    handleRowClick,
+    handleRowMouseEnter,
+    clearSelection,
+    selectAll,
+    getSelectedData
+  } = useTableSelection({
+    data: loads,
+    onSelectionChange: (selectedIds) => {
+      onSelectionChange(selectedIds);
     }
-  }, [isAddingNew, onLoadUpdate]);
+  });
+
+  // Create table instance
+  const table = useReactTable({
+    data: loads,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    enableRowSelection: true,
+    onRowSelectionChange: (updater) => {
+      const newSelection = typeof updater === 'function' 
+        ? updater(table.getState().rowSelection)
+        : updater;
+      
+      const selectedIds = Object.keys(newSelection)
+        .filter(key => newSelection[key])
+        .map(key => loads[parseInt(key)]?.id)
+        .filter(id => id !== undefined) as number[];
+      
+      onSelectionChange(selectedIds);
+    },
+    globalFilterFn: 'includesString',
+    state: {
+      globalFilter,
+      rowSelection: selectedLoads.reduce((acc, id) => {
+        const index = loads.findIndex(load => load.id === id);
+        if (index !== -1) {
+          acc[index] = true;
+        }
+        return acc;
+      }, {} as Record<string, boolean>)
+    }
+  });
+
+  // Editing functions
+  const handleStartEdit = useCallback((rowIndex: number, columnId: string, currentValue: any) => {
+    setEditingCell({ row: rowIndex, column: columnId });
+    setEditValue(currentValue?.toString() || '');
+  }, []);
+
+  const handleSaveEdit = useCallback(() => {
+    if (!editingCell) return;
+    
+    const load = loads[editingCell.row];
+    if (!load?.id) return;
+    
+    const field = editingCell.column;
+    const oldValue = (load as any)[field];
+    let newValue: any = editValue;
+    
+    // Type conversion based on field
+    if (['powerKw', 'powerHp', 'voltage', 'current', 'powerFactor', 'efficiency', 'demandFactor'].includes(field)) {
+      newValue = editValue ? parseFloat(editValue) : null;
+    }
+    
+    if (oldValue !== newValue) {
+      // Record change for undo
+      const action: UndoAction = {
+        action: 'update',
+        loadId: load.id,
+        field,
+        oldValue,
+        newValue,
+        timestamp: Date.now()
+      };
+      
+      setUndoStack(prev => [...prev.slice(-49), action]);
+      setRedoStack([]);
+      
+      // Track revision
+      revisionService.trackChange('load', load.id, load.tag, 'update', field, oldValue, newValue);
+      
+      // Update the load
+      onLoadUpdate(load.id, { [field]: newValue });
+    }
+    
+    setEditingCell(null);
+    setEditValue('');
+  }, [editingCell, editValue, loads, onLoadUpdate]);
+
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingCell(null);
+      setEditValue('');
+    }
+  }, [handleSaveEdit]);
+
+  // Undo/Redo functions
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    
+    const action = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [action, ...prev.slice(0, 49)]);
+    
+    // Revert the change
+    onLoadUpdate(action.loadId, { [action.field]: action.oldValue });
+  }, [undoStack, onLoadUpdate]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    
+    const action = redoStack[0];
+    setRedoStack(prev => prev.slice(1));
+    setUndoStack(prev => [...prev, action]);
+    
+    // Reapply the change
+    onLoadUpdate(action.loadId, { [action.field]: action.newValue });
+  }, [redoStack, onLoadUpdate]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts(table, selectedRange, {
+      onCopy: () => {
+        if (selectedRange) {
+          copyToClipboard(loads, selectedRange, table.getAllColumns());
+        }
+      },
+      onPaste: async () => {
+        if (selectedRange) {
+          try {
+            const clipboardData = await navigator.clipboard.readText();
+            const updates = await parseClipboardData(clipboardData, loads, selectedRange, table.getAllColumns());
+            
+            updates.forEach(update => {
+              if (update.id) {
+                onLoadUpdate(update.id, update.changes);
+              }
+            });
+          } catch (error) {
+            console.error('Failed to paste:', error);
+          }
+        }
+      },
+      onDelete: () => {
+        if (selectedRange) {
+          clearContents(loads, selectedRange, table.getAllColumns(), (id, changes) => {
+            onLoadUpdate(id, changes);
+          });
+        }
+      },
+      onFillDown: () => {
+        if (selectedRange) {
+          fillDown(loads, selectedRange, table.getAllColumns(), (id, changes) => {
+            onLoadUpdate(id, changes);
+          });
+        }
+      },
+      onFillRight: () => {
+        if (selectedRange) {
+          fillRight(loads, selectedRange, table.getAllColumns(), (id, changes) => {
+            onLoadUpdate(id, changes);
+          });
+        }
+      },
+      onStartEdit: (rowIndex, columnId) => {
+        const load = loads[rowIndex];
+        const currentValue = (load as any)[columnId];
+        handleStartEdit(rowIndex, columnId, currentValue);
+      },
+      onUndo: handleUndo,
+      onRedo: handleRedo
+  });
+
+  // Context menu functionality removed - can be added later if needed
+  // const handleContextMenu = useCallback((e: React.MouseEvent, rowIndex?: number) => {
+  //   e.preventDefault();
+  //   // Context menu implementation would go here
+  // }, []);
+
+  const selectedCount = Object.keys(table.getState().rowSelection).length;
+  const hasSelection = selectedCount > 0;
 
   return (
     <div className="flex flex-col h-full">
-      {/* Search and Filter Bar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-3">
-          {/* Search Field */}
-          <div className="flex-1 max-w-80">
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search loads..."
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Filter Dropdowns */}
-          <select
-            value={filters.loadType}
-            onChange={(e) => handleFilterChange('loadType', e.target.value)}
-            className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-gray-600"
-          >
-            <option value="">All Types</option>
-            {Object.values(LoadType).map(type => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
-
-          <select
-            value={filters.voltage}
-            onChange={(e) => handleFilterChange('voltage', e.target.value)}
-            className="px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-gray-600"
-          >
-            <option value="">All Voltages</option>
-            <option value="120">120V</option>
-            <option value="240">240V</option>
-            <option value="480">480V</option>
-            <option value="600">600V</option>
-            <option value="4160">4.16kV</option>
-          </select>
-
-          {/* Clear Filters */}
-          {(searchTerm || Object.values(filters).some(v => v)) && (
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">Loads ({loads.length})</h2>
+          {hasSelection && (
+            <span className="text-sm text-gray-500">
+              {selectedCount} selected
+            </span>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {onAddLoad && (
             <button
-              onClick={handleClearFilters}
-              className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800 border border-gray-300 rounded hover:bg-gray-50"
+              onClick={onAddLoad}
+              className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              Clear
+              Add Load
             </button>
           )}
-
+          {onAddFromLibrary && (
+            <button
+              onClick={onAddFromLibrary}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Add from Library
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Bulk Actions Bar */}
-      {selectedLoads.length > 0 && (
+      {/* Bulk Actions */}
+      {hasSelection && (
         <BulkActionsBar
-          selectedCount={selectedLoads.length}
-          entityName="load"
+          selectedCount={selectedCount}
           onBulkEdit={onBulkEdit}
-          onBulkDelete={async () => {
-            const confirmed = await showConfirm({
-              title: 'Delete Loads',
-              message: `Are you sure you want to delete ${selectedLoads.length} selected loads? This action cannot be undone.`,
-              confirmText: 'Delete All',
-              cancelText: 'Cancel',
-              type: 'danger'
-            });
-
-            if (confirmed) {
-              try {
-                for (const loadId of selectedLoads) {
-                  onLoadDelete(loadId);
-                }
-                showSuccess(`Successfully deleted ${selectedLoads.length} loads`);
-                onSelectionChange([]);
-              } catch (error) {
-                showError(`Failed to delete loads: ${error}`);
-              }
-            }
-          }}
-          onBulkExport={() => {
-            // Export only selected loads
-            const selectedLoadData = filteredLoads.filter(load => selectedLoads.includes(load.id!));
+          onBulkDelete={() => {
+            const selectedIds = Object.keys(table.getState().rowSelection)
+              .filter(key => table.getState().rowSelection[key])
+              .map(key => loads[parseInt(key)]?.id)
+              .filter(id => id !== undefined) as number[];
             
-            try {
-              const headers = [
-                'Tag',
-                'Description',
-                'Load Type',
-                'Power (kW)',
-                'Power (HP)',
-                'Voltage',
-                'Current',
-                'Power Factor',
-                'Demand Load (kW)',
-                'Connected Load (kW)',
-                'Efficiency',
-                'Feeder Cable',
-                'Starter Type',
-                'Protection Type',
-                'Notes'
-              ];
-
-              const csvContent = [
-                headers.join(','),
-                ...selectedLoadData.map(load => [
-                  `"${load.tag || ''}"`,
-                  `"${load.description || ''}"`,
-                  `"${load.loadType || ''}"`,
-                  load.powerKw || '',
-                  load.powerHp || '',
-                  load.voltage || '',
-                  load.current || '',
-                  load.powerFactor || '',
-                  load.demandLoadKw || '',
-                  load.connectedLoadKw || '',
-                  load.efficiency || '',
-                  `"${load.feederCable || ''}"`,
-                  `"${load.starterType || ''}"`,
-                  `"${load.protectionType || ''}"`,
-                  `"${load.notes?.replace(/"/g, '""') || ''}"`
-                ].join(','))
-              ].join('\n');
-
-              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-              const link = document.createElement('a');
-              
-              if (link.download !== undefined) {
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                
-                const now = new Date();
-                const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
-                const filename = `selected-loads-${timestamp}.csv`;
-                
-                link.setAttribute('download', filename);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                showSuccess(`Exported ${selectedLoadData.length} selected loads to ${filename}`);
-              }
-            } catch (error) {
-              console.error('Export failed:', error);
-              showError(`Export failed: ${error}`);
-            }
-          }}
-          onClearSelection={() => {
-            onSelectionChange([]);
+            selectedIds.forEach(id => onLoadDelete(id));
           }}
         />
       )}
 
-      {/* AG-Grid Table */}
-      <div className="flex-1 ag-theme-alpine">
-        <AgGridReact
-          rowData={filteredLoads}
-          columnDefs={columnDefs}
-          defaultColDef={{
-            sortable: true,
-            filter: true,
-            resizable: true,
-            cellClass: 'flex items-center'
-          }}
-          rowSelection="multiple"
-          suppressRowClickSelection={true}
-          onGridReady={onGridReady}
-          onCellValueChanged={handleRowValueChanged}
-          onSelectionChanged={onSelectionChanged}
-          getRowId={(params) => params.data.id?.toString() || params.data.tag || Math.random().toString()}
-          headerHeight={32}
-          rowHeight={40}
-          animateRows={true}
-          pagination={true}
-          paginationPageSize={50}
-          suppressCellFocus={true}
-          enterNavigatesVertically={true}
-          enableCellTextSelection={true}
-        />
+      {/* Filters */}
+      <FilterBar
+        globalFilter={globalFilter}
+        onGlobalFilterChange={setGlobalFilter}
+        columnFilters={columnFilters}
+        onColumnFiltersChange={setColumnFilters}
+        columns={table.getAllColumns().map(col => ({
+          id: col.id,
+          label: typeof col.columnDef.header === 'string' ? col.columnDef.header : col.id
+        }))}
+      />
+
+      {/* Table */}
+      <div className="flex-1 overflow-hidden">
+        <div 
+          ref={tableRef}
+          className="h-full overflow-auto"
+          // onContextMenu={(e) => handleContextMenu(e)}
+        >
+          <table className="tanstack-table">
+            <thead>
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map(header => (
+                    <th
+                      key={header.id}
+                      style={{ width: header.getSize() }}
+                      className={header.column.getCanSort() ? 'sortable' : ''}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <div className="flex items-center gap-2">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {header.column.getIsSorted() && (
+                          <ChevronDown 
+                            className={`w-4 h-4 transition-transform ${
+                              header.column.getIsSorted() === 'desc' ? 'rotate-180' : ''
+                            }`}
+                          />
+                        )}
+                      </div>
+                      {header.column.getCanResize() && (
+                        <div
+                          className="resize-handle"
+                          onMouseDown={header.getResizeHandler()}
+                        />
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map(row => (
+                <tr
+                  key={row.id}
+                  className={`
+                    ${row.getIsSelected() ? 'selected' : ''}
+                    ${selectedRows.has(parseInt(row.id)) ? 'table-row-selected' : ''}
+                    ${isRangeSelecting && selectedRange && 
+                      parseInt(row.id) >= Math.min(selectedRange.start.row, selectedRange.end.row) &&
+                      parseInt(row.id) <= Math.max(selectedRange.start.row, selectedRange.end.row)
+                      ? 'table-row-range' : ''}
+                  `}
+                  onClick={(e) => handleRowClick(e, parseInt(row.id))}
+                  onMouseEnter={() => handleRowMouseEnter(parseInt(row.id))}
+                  // onContextMenu={(e) => handleContextMenu(e, parseInt(row.id))}
+                >
+                  {row.getVisibleCells().map(cell => (
+                    <td key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          
+          {table.getRowModel().rows.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+              <Zap className="w-12 h-12 mb-4 text-gray-400" />
+              <h3 className="text-lg font-medium mb-2">No Loads</h3>
+              <p className="text-sm text-center mb-4">
+                Get started by adding your first electrical load.
+              </p>
+              {onAddLoad && (
+                <button
+                  onClick={onAddLoad}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                >
+                  Add Load
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

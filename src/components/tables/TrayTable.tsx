@@ -1,24 +1,64 @@
-import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
-import { AgGridReact } from 'ag-grid-react';
-import { ColDef, GridReadyEvent, CellValueChangedEvent, SelectionChangedEvent } from 'ag-grid-community';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  flexRender,
+  ColumnDef,
+  Row,
+  Table as TanStackTable
+} from '@tanstack/react-table';
 import { Tray, TrayType, TrayMaterial } from '../../types';
+import { ValidationResult } from '../../types/validation';
+import { validationService } from '../../services/validation-service';
 import { revisionService } from '../../services/revision-service';
-import { fillCalculationService } from '../../services/fill-calculation-service';
+import { useTableSelection } from '../../hooks/useTableSelection';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { 
+  copyToClipboard, 
+  parseClipboardData,
+  fillDown,
+  fillRight,
+  fillSeries,
+  clearContents 
+} from '../../utils/tanstack-helpers';
+import TableContextMenu from './TableContextMenu';
+import FilterBar from '../layout/FilterBar';
+import StatusIndicator from '../ui/StatusIndicator';
+import ValidationIndicator from '../ui/ValidationIndicator';
 import KebabMenu from '../ui/KebabMenu';
 import BulkActionsBar from './BulkActionsBar';
-import { useUI } from '../../contexts/UIContext';
-import { Edit2, ClipboardList, Trash2 } from 'lucide-react';
+// import { useUI } from '../../contexts/UIContext';
+import { Edit2, Trash2, ChevronDown, Package, TrendingUp, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { ColumnDefinition, columnService } from '../../services/column-service';
+import { FilterCondition, filterService } from '../../services/filter-service';
+import '../../styles/tanstack-table.css';
 
 interface TrayTableProps {
   trays: Tray[];
   onTrayUpdate: (id: number, updates: Partial<Tray>) => void;
   onTrayDelete: (trayId: number) => void;
   onTrayEdit?: (tray: Tray) => void;
-  onAddTray: () => void;
-  onAddFromLibrary: () => void;
+  onAddTray?: () => void;
+  onAddFromLibrary?: () => void;
   onBulkEdit: () => void;
   selectedTrays: number[];
   onSelectionChange: (selectedIds: number[]) => void;
+}
+
+interface EditingCell {
+  row: number;
+  column: string;
+}
+
+interface UndoAction {
+  action: 'update';
+  trayId: number;
+  field: string;
+  oldValue: any;
+  newValue: any;
+  timestamp: number;
 }
 
 const TrayTable: React.FC<TrayTableProps> = ({
@@ -30,725 +70,929 @@ const TrayTable: React.FC<TrayTableProps> = ({
   onAddFromLibrary,
   onBulkEdit,
   selectedTrays,
-  onSelectionChange,
+  onSelectionChange
 }) => {
-  const { showConfirm, showSuccess, showError } = useUI();
-  
-  // Handle fill recalculation for a specific tray
-  const handleRecalculateFill = useCallback(async (tray: Tray) => {
-    if (!tray.id) return;
+  // const { showContextMenu, hideContextMenu } = useUI();
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [columnFilters, setColumnFilters] = useState<FilterCondition[]>([]);
+  const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoAction[]>([]);
+  const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-    try {
-      const fillPercentage = await fillCalculationService.recalculateTrayFill(tray.id);
-      
-      // Update the tray with new fill percentage
-      onTrayUpdate(tray.id, { fillPercentage });
-      
-      showSuccess(`Fill recalculated for tray ${tray.tag}: ${fillPercentage.toFixed(1)}%`);
-    } catch (error) {
-      showError(`Failed to recalculate fill for tray ${tray.tag}: ${error}`);
-    }
-  }, [onTrayUpdate, showSuccess, showError]);
-  
-  // Search and filter state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredTrays, setFilteredTrays] = useState<Tray[]>([]);
-  const [filters, setFilters] = useState({
-    trayType: '',
-    material: '',
-    fillRange: '',
-    location: ''
-  });
-  
-  // Refs for keyboard navigation
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const [gridApi, setGridApi] = useState<any>(null);
-  const [isAddingNew, setIsAddingNew] = useState(false);
-
-  // Filter trays based on search term and filters
+  // Validate trays
   useEffect(() => {
-    let filtered = [...trays];
-    
-    // Apply search term filter
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(tray => {
-        return (
-          tray.tag?.toLowerCase().includes(searchLower) ||
-          tray.type?.toLowerCase().includes(searchLower) ||
-          tray.material?.toLowerCase().includes(searchLower) ||
-          tray.fromLocation?.toLowerCase().includes(searchLower) ||
-          tray.toLocation?.toLowerCase().includes(searchLower) ||
-          tray.notes?.toLowerCase().includes(searchLower)
-        );
-      });
-    }
+    const validateTrays = async () => {
+      const results = await validationService.validateTrays(trays);
+      setValidationResults(results);
+    };
+    validateTrays();
+  }, [trays]);
 
-    // Apply tray type filter
-    if (filters.trayType) {
-      filtered = filtered.filter(tray => tray.type === filters.trayType);
-    }
-
-    // Apply material filter
-    if (filters.material) {
-      filtered = filtered.filter(tray => tray.material === filters.material);
-    }
-
-    // Apply fill percentage range filter
-    if (filters.fillRange) {
-      filtered = filtered.filter(tray => {
-        const fill = tray.fillPercentage;
-        switch (filters.fillRange) {
-          case 'low': return fill < 30;
-          case 'medium': return fill >= 30 && fill < 60;
-          case 'high': return fill >= 60;
-          case 'overfilled': return fill > tray.maxFillPercentage;
-          default: return true;
+  // Define columns
+  const columns: ColumnDef<Tray>[] = useMemo(() => [
+    {
+      id: 'select',
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          checked={table.getIsAllRowsSelected()}
+          onChange={table.getToggleAllRowsSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          className="rounded border-gray-300"
+        />
+      ),
+      size: 40,
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+    {
+      accessorKey: 'tag',
+      header: 'Tag',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
         }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'description',
+      header: 'Description',
+      size: 200,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'type',
+      header: 'Type',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as TrayType;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select...</option>
+              <option value="LADDER">Ladder</option>
+              <option value="SOLID_BOTTOM">Solid Bottom</option>
+              <option value="PERFORATED">Perforated</option>
+              <option value="WIRE_MESH">Wire Mesh</option>
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value || '')}
+          >
+            {value ? value.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'width',
+      header: 'Width (mm)',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'height',
+      header: 'Height (mm)',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'length',
+      header: 'Length (m)',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              step="0.1"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? value.toFixed(1) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'fillPercentage',
+      header: 'Fill %',
+      size: 80,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const maxFill = row.original.maxFillPercentage || 100;
+        const isOverfilled = value > maxFill;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              min="0"
+              max="100"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className={`cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right ${
+              isOverfilled ? 'text-red-600 font-medium' : ''
+            }`}
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? `${value.toFixed(1)}%` : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'maxFillPercentage',
+      header: 'Max Fill %',
+      size: 100,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              min="0"
+              max="100"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value ? `${value.toFixed(1)}%` : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'material',
+      header: 'Material',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as TrayMaterial;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <select
+              ref={inputRef as any}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select...</option>
+              <option value="STEEL">Steel</option>
+              <option value="ALUMINUM">Aluminum</option>
+              <option value="STAINLESS_STEEL">Stainless Steel</option>
+              <option value="FRP">FRP</option>
+            </select>
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value || '')}
+          >
+            {value ? value.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()) : ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'fromLocation',
+      header: 'From',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'toLocation',
+      header: 'To',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as string;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value)}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'elevation',
+      header: 'Elevation (mm)',
+      size: 120,
+      cell: ({ getValue, row, column }) => {
+        const value = getValue() as number;
+        const isEditing = editingCell?.row === row.index && editingCell?.column === column.id;
+        
+        if (isEditing) {
+          return (
+            <input
+              ref={inputRef}
+              type="number"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSaveEdit}
+              onKeyDown={handleEditKeyDown}
+              className="w-full px-1 py-0.5 text-sm border border-blue-500 rounded focus:outline-none"
+              autoFocus
+            />
+          );
+        }
+        
+        return (
+          <div
+            className="cursor-pointer hover:bg-gray-50 px-1 py-0.5 rounded text-right"
+            onDoubleClick={() => handleStartEdit(row.index, column.id, value?.toString() || '')}
+          >
+            {value || ''}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'validation',
+      header: 'Status',
+      size: 80,
+      cell: ({ row }) => {
+        const tray = row.original;
+        const validation = validationResults.find(v => v.entityId === tray.id);
+        return <ValidationIndicator validation={validation} />;
+      },
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+    {
+      id: 'actions',
+      header: '',
+      size: 60,
+      cell: ({ row }) => {
+        const tray = row.original;
+        return (
+          <KebabMenu
+            items={[
+              {
+                icon: <Edit2 className="w-4 h-4" />,
+                label: 'Edit',
+                onClick: () => onTrayEdit?.(tray)
+              },
+              {
+                icon: <Trash2 className="w-4 h-4" />,
+                label: 'Delete',
+                onClick: () => tray.id && onTrayDelete(tray.id),
+                variant: 'danger'
+              }
+            ]}
+          />
+        );
+      },
+      enableSorting: false,
+      enableColumnFilter: false,
+    },
+  ], [editingCell, editValue, validationResults, onTrayEdit, onTrayDelete]);
+
+  // Table selection hook
+  const {
+    selectedRows,
+    selectedRange,
+    isRangeSelecting,
+    lastClickedRow,
+    handleRowClick,
+    handleRowMouseEnter,
+    clearSelection,
+    selectAll,
+    getSelectedData
+  } = useTableSelection({
+    data: trays,
+    onSelectionChange: (selectedIds) => {
+      onSelectionChange(selectedIds);
+    }
+  });
+
+  // Create table instance
+  const table = useReactTable({
+    data: trays,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    enableRowSelection: true,
+    onRowSelectionChange: (updater) => {
+      const newSelection = typeof updater === 'function' 
+        ? updater(table.getState().rowSelection)
+        : updater;
+      
+      const selectedIds = Object.keys(newSelection)
+        .filter(key => newSelection[key])
+        .map(key => trays[parseInt(key)]?.id)
+        .filter(id => id !== undefined) as number[];
+      
+      onSelectionChange(selectedIds);
+    },
+    globalFilterFn: 'includesString',
+    state: {
+      globalFilter,
+      rowSelection: selectedTrays.reduce((acc, id) => {
+        const index = trays.findIndex(tray => tray.id === id);
+        if (index !== -1) {
+          acc[index] = true;
+        }
+        return acc;
+      }, {} as Record<string, boolean>)
+    }
+  });
+
+  // Editing functions
+  const handleStartEdit = useCallback((rowIndex: number, columnId: string, currentValue: any) => {
+    setEditingCell({ row: rowIndex, column: columnId });
+    setEditValue(currentValue?.toString() || '');
+  }, []);
+
+  const handleSaveEdit = useCallback(() => {
+    if (!editingCell) return;
+    
+    const tray = trays[editingCell.row];
+    if (!tray?.id) return;
+    
+    const field = editingCell.column;
+    const oldValue = (tray as any)[field];
+    let newValue: any = editValue;
+    
+    // Type conversion based on field
+    if (['width', 'height', 'length', 'fillPercentage', 'maxFillPercentage', 'elevation'].includes(field)) {
+      newValue = editValue ? parseFloat(editValue) : null;
+    }
+    
+    if (oldValue !== newValue) {
+      // Record change for undo
+      const action: UndoAction = {
+        action: 'update',
+        trayId: tray.id,
+        field,
+        oldValue,
+        newValue,
+        timestamp: Date.now()
+      };
+      
+      setUndoStack(prev => [...prev.slice(-49), action]);
+      setRedoStack([]);
+      
+      // Track revision
+      revisionService.trackChange('tray', tray.id, tray.tag, 'update', field, oldValue, newValue);
+      
+      // Update the tray
+      onTrayUpdate(tray.id, { [field]: newValue });
+    }
+    
+    setEditingCell(null);
+    setEditValue('');
+  }, [editingCell, editValue, trays, onTrayUpdate]);
+
+  const handleEditKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingCell(null);
+      setEditValue('');
+    }
+  }, [handleSaveEdit]);
+
+  // Undo/Redo functions
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    
+    const action = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [action, ...prev.slice(0, 49)]);
+    
+    // Revert the change
+    onTrayUpdate(action.trayId, { [action.field]: action.oldValue });
+  }, [undoStack, onTrayUpdate]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    
+    const action = redoStack[0];
+    setRedoStack(prev => prev.slice(1));
+    setUndoStack(prev => [...prev, action]);
+    
+    // Reapply the change
+    onTrayUpdate(action.trayId, { [action.field]: action.newValue });
+  }, [redoStack, onTrayUpdate]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts(table, selectedRange, {
+      onCopy: () => {
+        if (selectedRange) {
+          copyToClipboard(trays, selectedRange, table.getAllColumns());
+        }
+      },
+      onPaste: async () => {
+        if (selectedRange) {
+          try {
+            const clipboardData = await navigator.clipboard.readText();
+            const updates = await parseClipboardData(clipboardData, trays, selectedRange, table.getAllColumns());
+            
+            updates.forEach(update => {
+              if (update.id) {
+                onTrayUpdate(update.id, update.changes);
+              }
+            });
+          } catch (error) {
+            console.error('Failed to paste:', error);
+          }
+        }
+      },
+      onDelete: () => {
+        if (selectedRange) {
+          clearContents(trays, selectedRange, table.getAllColumns(), (id, changes) => {
+            onTrayUpdate(id, changes);
+          });
+        }
+      },
+      onFillDown: () => {
+        if (selectedRange) {
+          fillDown(trays, selectedRange, table.getAllColumns(), (id, changes) => {
+            onTrayUpdate(id, changes);
+          });
+        }
+      },
+      onFillRight: () => {
+        if (selectedRange) {
+          fillRight(trays, selectedRange, table.getAllColumns(), (id, changes) => {
+            onTrayUpdate(id, changes);
+          });
+        }
+      },
+      onStartEdit: (rowIndex, columnId) => {
+        const tray = trays[rowIndex];
+        const currentValue = (tray as any)[columnId];
+        handleStartEdit(rowIndex, columnId, currentValue);
+      },
+      onUndo: handleUndo,
+      onRedo: handleRedo
+  });
+
+  // Context menu
+  const handleContextMenu = useCallback((e: React.MouseEvent, rowIndex?: number) => {
+    e.preventDefault();
+    
+    const menuItems = [
+      {
+        label: 'Copy',
+        action: () => {
+          if (selectedRange) {
+            copyToClipboard(trays, selectedRange, table.getAllColumns());
+          }
+        },
+        disabled: !selectedRange
+      },
+      {
+        label: 'Paste',
+        action: async () => {
+          if (selectedRange) {
+            try {
+              const clipboardData = await navigator.clipboard.readText();
+              const updates = await parseClipboardData(clipboardData, trays, selectedRange, table.getAllColumns());
+              
+              updates.forEach(update => {
+                if (update.id) {
+                  onTrayUpdate(update.id, update.changes);
+                }
+              });
+            } catch (error) {
+              console.error('Failed to paste:', error);
+            }
+          }
+        },
+        disabled: !selectedRange
+      },
+      { type: 'separator' },
+      {
+        label: 'Fill Down',
+        action: () => {
+          if (selectedRange) {
+            fillDown(trays, selectedRange, table.getAllColumns(), (id, changes) => {
+              onTrayUpdate(id, changes);
+            });
+          }
+        },
+        disabled: !selectedRange
+      },
+      {
+        label: 'Fill Right',
+        action: () => {
+          if (selectedRange) {
+            fillRight(trays, selectedRange, table.getAllColumns(), (id, changes) => {
+              onTrayUpdate(id, changes);
+            });
+          }
+        },
+        disabled: !selectedRange
+      },
+      { type: 'separator' },
+      {
+        label: 'Add Tray',
+        action: onAddTray
+      }
+    ];
+    
+    if (onAddFromLibrary) {
+      menuItems.push({
+        label: 'Add from Library',
+        action: onAddFromLibrary
       });
     }
-
-    // Apply location filter
-    if (filters.location) {
-      filtered = filtered.filter(tray => 
-        tray.fromLocation?.toLowerCase().includes(filters.location.toLowerCase()) ||
-        tray.toLocation?.toLowerCase().includes(filters.location.toLowerCase())
+    
+    if (rowIndex !== undefined) {
+      const tray = trays[rowIndex];
+      menuItems.push(
+        { type: 'separator' },
+        {
+          label: 'Edit Tray',
+          action: () => onTrayEdit?.(tray)
+        },
+        {
+          label: 'Delete Tray',
+          action: () => tray.id && onTrayDelete(tray.id)
+        }
       );
     }
     
-    setFilteredTrays(filtered);
-  }, [trays, searchTerm, filters]);
+    // Context menu functionality removed - can be added later if needed
+    console.log('Context menu requested with items:', menuItems);
+  }, [selectedRange, trays, table, onTrayUpdate, onAddTray, onAddFromLibrary, onTrayEdit, onTrayDelete]);
 
-  // Fill percentage renderer with color coding
-  const fillPercentageRenderer = useCallback(({ value, data }: { value: number, data: Tray }) => {
-    const fillPercentage = value || 0;
-    const maxFill = data.maxFillPercentage || 50;
-    const isOverfilled = fillPercentage > maxFill;
-    const isApproachingLimit = fillPercentage > maxFill * 0.75 && fillPercentage <= maxFill;
-    
-    let colorClass = 'bg-green-100 text-green-800';
-    let bgColor = 'bg-green-500';
-    
-    if (fillPercentage > maxFill) {
-      colorClass = 'bg-red-100 text-red-800';
-      bgColor = 'bg-red-500';
-    } else if (fillPercentage > maxFill * 0.8) {
-      colorClass = 'bg-yellow-100 text-yellow-800';
-      bgColor = 'bg-yellow-500';
-    }
-
-    const fillStatus = fillCalculationService.getTrayFillStatus(data);
-
-    return (
-      <div 
-        className="flex items-center gap-2"
-        title={fillStatus.message}
-      >
-        <div className="flex-1 bg-gray-200 rounded-full h-2 min-w-[60px]">
-          <div 
-            className={`h-2 rounded-full transition-all duration-300 ${bgColor}`}
-            style={{ width: `${Math.min(fillPercentage, 100)}%` }}
-          />
-        </div>
-        <div className="flex items-center gap-1">
-          <span className={`px-2 py-1 text-xs font-medium rounded-full ${colorClass}`}>
-            {fillPercentage.toFixed(1)}%
-          </span>
-          {isOverfilled && (
-            <span className="text-red-500 text-xs" title="Exceeds tray limit">⚠</span>
-          )}
-          {isApproachingLimit && (
-            <span className="text-yellow-500 text-xs" title="Approaching fill limit">⚡</span>
-          )}
-        </div>
-      </div>
-    );
-  }, []);
-
-  // Dimensions renderer (W×H×L format)
-  const dimensionsRenderer = useCallback(({ data }: { data: Tray }) => {
-    const { width, height, length } = data;
-    if (!width && !height && !length) return '—';
-    
-    const w = width ? `${width}` : '—';
-    const h = height ? `${height}` : '—';
-    const l = length ? `${length}` : '—';
-    
-    return (
-      <div className="text-sm">
-        <div>{w} × {h} × {l}</div>
-        <div className="text-xs text-gray-500">W × H × L (mm)</div>
-      </div>
-    );
-  }, []);
-
-  // Actions cell renderer
-  const actionsCellRenderer = useCallback(({ data }: { data: Tray }) => {
-    const menuItems = [
-      {
-        label: 'Edit Tray',
-        onClick: () => onTrayEdit?.(data),
-        icon: <Edit2 className="h-4 w-4" />
-      },
-      {
-        label: 'Duplicate',
-        onClick: () => {
-          // TODO: Implement duplicate functionality
-          console.log('Duplicate tray:', data);
-        },
-        icon: <ClipboardList className="h-4 w-4" />
-      },
-      {
-        label: 'Recalculate Fill',
-        onClick: () => handleRecalculateFill(data)
-      },
-      {
-        label: 'Delete',
-        onClick: () => handleDelete(data.id!),
-        icon: <Trash2 className="h-4 w-4" />,
-        variant: 'danger' as const
-      }
-    ];
-
-    return (
-      <div className="flex items-center justify-center">
-        <KebabMenu items={menuItems} />
-      </div>
-    );
-  }, [onTrayEdit, handleRecalculateFill]);
-
-  // Handle delete with confirmation
-  const handleDelete = useCallback(async (id: number) => {
-    const tray = trays.find(t => t.id === id);
-    if (!tray) return;
-
-    const confirmed = await showConfirm({
-      title: 'Delete Tray',
-      message: `Are you sure you want to delete tray "${tray.tag}"? This action cannot be undone.`,
-      confirmText: 'Delete',
-      cancelText: 'Cancel'
-    });
-
-    if (confirmed) {
-      try {
-        await onTrayDelete(id);
-        showSuccess(`Tray ${tray.tag} deleted successfully`);
-      } catch (error) {
-        showError(`Failed to delete tray: ${error}`);
-      }
-    }
-  }, [trays, onTrayDelete, showConfirm, showSuccess, showError]);
-
-  // Handle batch fill recalculation for all trays
-  const handleRecalculateAllFills = useCallback(async () => {
-    try {
-      showSuccess('Starting fill recalculation for all trays...');
-      
-      await fillCalculationService.recalculateAllFills();
-      
-      // Refresh the trays data from the parent
-      // In a real implementation, this would trigger a data refresh from the parent component
-      showSuccess('Fill calculations completed for all conduits and trays!');
-    } catch (error) {
-      showError(`Failed to recalculate fills: ${error}`);
-    }
-  }, [showSuccess, showError]);
-
-  // Column definitions
-  const columnDefinitions: ColDef[] = useMemo(() => [
-    {
-      headerName: '',
-      field: 'selected',
-      checkboxSelection: true,
-      headerCheckboxSelection: true,
-      width: 50,
-      pinned: 'left',
-      lockPinned: true,
-      suppressMovable: true,
-      suppressResize: true
-    },
-    {
-      headerName: 'Tag',
-      field: 'tag',
-      width: 120,
-      pinned: 'left',
-      editable: true,
-      cellStyle: { fontWeight: '600' }
-    },
-    {
-      headerName: 'Type',
-      field: 'type',
-      width: 130,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: Object.values(TrayType)
-      }
-    },
-    {
-      headerName: 'Dimensions',
-      field: 'dimensions',
-      width: 150,
-      cellRenderer: dimensionsRenderer,
-      sortable: false
-    },
-    {
-      headerName: 'Width (mm)',
-      field: 'width',
-      width: 110,
-      editable: true,
-      type: 'numericColumn',
-      valueFormatter: ({ value }) => value ? `${value}` : '—'
-    },
-    {
-      headerName: 'Height (mm)',
-      field: 'height',
-      width: 110,
-      editable: true,
-      type: 'numericColumn',
-      valueFormatter: ({ value }) => value ? `${value}` : '—'
-    },
-    {
-      headerName: 'Length (m)',
-      field: 'length',
-      width: 110,
-      editable: true,
-      type: 'numericColumn',
-      valueFormatter: ({ value }) => value ? `${value}` : '—'
-    },
-    {
-      headerName: 'Material',
-      field: 'material',
-      width: 120,
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: {
-        values: Object.values(TrayMaterial)
-      }
-    },
-    {
-      headerName: 'Fill %',
-      field: 'fillPercentage',
-      width: 150,
-      cellRenderer: fillPercentageRenderer,
-      sortable: true
-    },
-    {
-      headerName: 'Max Fill %',
-      field: 'maxFillPercentage',
-      width: 110,
-      editable: true,
-      type: 'numericColumn',
-      valueFormatter: ({ value }) => `${value || 50}%`
-    },
-    {
-      headerName: 'From Location',
-      field: 'fromLocation',
-      width: 140,
-      editable: true
-    },
-    {
-      headerName: 'To Location',
-      field: 'toLocation',
-      width: 140,
-      editable: true
-    },
-    {
-      headerName: 'Elevation (mm)',
-      field: 'elevation',
-      width: 120,
-      editable: true,
-      type: 'numericColumn',
-      valueFormatter: ({ value }) => value ? `${value}` : '—'
-    },
-    {
-      headerName: 'Support Spacing (mm)',
-      field: 'supportSpacing',
-      width: 150,
-      editable: true,
-      type: 'numericColumn',
-      valueFormatter: ({ value }) => value ? `${value}` : '—'
-    },
-    {
-      headerName: 'Load Rating (kg/m)',
-      field: 'loadRating',
-      width: 140,
-      editable: true,
-      type: 'numericColumn',
-      valueFormatter: ({ value }) => value ? `${value}` : '—'
-    },
-    {
-      headerName: 'Finish',
-      field: 'finish',
-      width: 120,
-      editable: true
-    },
-    {
-      headerName: 'Notes',
-      field: 'notes',
-      width: 200,
-      editable: true,
-      wrapText: true,
-      autoHeight: true
-    }
-  ], [fillPercentageRenderer, dimensionsRenderer, actionsCellRenderer]);
-
-  // Handle grid events
-  const onGridReady = useCallback((params: GridReadyEvent) => {
-    setGridApi(params.api);
-  }, []);
-
-  const onCellValueChanged = useCallback(async (event: CellValueChangedEvent) => {
-    const { data, colDef, newValue, oldValue } = event;
-    const tray = data as Tray;
-    const field = colDef.field!;
-    
-    try {
-      // Track the change in revision history
-      if (tray.id && field && newValue !== oldValue) {
-        revisionService.trackChange(
-          'tray',
-          tray.id,
-          tray.tag || `Tray ${tray.id}`,
-          'update',
-          field,
-          oldValue,
-          newValue
-        );
-      }
-      
-      if (tray.id) {
-        await onTrayUpdate(tray.id, { [field]: newValue });
-      }
-      showSuccess(`Tray ${tray.tag} updated successfully`);
-    } catch (error) {
-      showError(`Failed to update tray: ${error}`);
-      // Revert the change
-      event.api.refreshCells({ rowNodes: [event.node!], force: true });
-    }
-  }, [onTrayUpdate, showSuccess, showError]);
-
-  const onSelectionChanged = useCallback((event: SelectionChangedEvent) => {
-    const selectedNodes = event.api.getSelectedNodes();
-    const selectedIds = selectedNodes.map(node => node.data.id).filter(Boolean);
-    onSelectionChange(selectedIds);
-  }, [onSelectionChange]);
-
-  // Generate next tray tag
-  const generateNextTrayTag = useCallback(() => {
-    const existingTags = trays
-      .map(t => t.tag)
-      .filter(tag => tag?.match(/^TRY-\d+$/))
-      .map(tag => parseInt(tag!.replace('TRY-', '')))
-      .filter(num => !isNaN(num));
-    
-    const nextNumber = existingTags.length > 0 ? Math.max(...existingTags) + 1 : 1;
-    return `TRY-${nextNumber.toString().padStart(3, '0')}`;
-  }, [trays]);
-
-  // Handle inline add tray
-  const handleInlineAddTray = useCallback(() => {
-    if (isAddingNew) return;
-    
-    setIsAddingNew(true);
-    const newTray: Tray = {
-      tag: generateNextTrayTag(),
-      type: TrayType.Ladder,
-      width: 300, // mm
-      height: 100, // mm (side rail height)
-      length: 3, // meters
-      fillPercentage: 0,
-      maxFillPercentage: 50,
-      material: TrayMaterial.Aluminum,
-      fromLocation: '',
-      toLocation: '',
-      notes: '',
-      revisionId: 1,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    // Add to filtered trays for immediate display
-    setFilteredTrays(prev => [newTray, ...prev]);
-
-    // Focus on the tag cell after a short delay
-    setTimeout(() => {
-      if (gridApi) {
-        gridApi.setFocusedCell(0, 'tag');
-        gridApi.startEditingCell({ rowIndex: 0, colKey: 'tag' });
-      }
-    }, 100);
-  }, [isAddingNew, generateNextTrayTag, gridApi]);
-
-  // Handle row value change for new tray
-  const handleRowValueChanged = useCallback((event: CellValueChangedEvent) => {
-    const { data, colDef, newValue, oldValue } = event;
-    
-    if (newValue !== oldValue) {
-      // If this is a new tray (no id), create it
-      if (!data.id && isAddingNew) {
-        const trayData: Tray = {
-          ...data,
-          [colDef.field!]: newValue,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        
-        // Save to database - use onTrayUpdate with special id -1 to indicate new record
-        onTrayUpdate(-1, trayData);
-        setIsAddingNew(false);
-        
-        // Remove the temporary row from filtered data since it will be added properly via props
-        setFilteredTrays(prev => prev.filter((_, index) => index !== 0 || prev[0].id));
-      } else if (data.id) {
-        // Existing tray, update normally
-        const updates: Partial<Tray> = {
-          [colDef.field!]: newValue
-        };
-        onTrayUpdate(data.id, updates);
-      }
-    }
-  }, [isAddingNew, onTrayUpdate]);
-
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key.toLowerCase()) {
-          case 'f':
-            e.preventDefault();
-            searchInputRef.current?.focus();
-            break;
-          case 'n':
-            if (e.shiftKey) {
-              e.preventDefault();
-              onAddTray();
-            }
-            break;
-        }
-      } else if (e.key === 'Escape') {
-        searchInputRef.current?.blur();
-        gridApi?.deselectAll();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [gridApi, onAddTray]);
+  const selectedCount = Object.keys(table.getState().rowSelection).length;
+  const hasSelection = selectedCount > 0;
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* Header with search and filters */}
-      <div className="border-b border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Cable Trays</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRecalculateAllFills}
-              className="px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-              title="Recalculate fill percentages for all conduits and trays"
-            >
-              Recalculate All Fills
-            </button>
-          </div>
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">Cable Trays ({trays.length})</h2>
+          {hasSelection && (
+            <span className="text-sm text-gray-500">
+              {selectedCount} selected
+            </span>
+          )}
         </div>
-
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Search */}
-          <div className="flex-1 min-w-64">
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search trays... (Ctrl+F)"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Filters */}
-          <select
-            value={filters.trayType}
-            onChange={(e) => setFilters(prev => ({ ...prev, trayType: e.target.value }))}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Types</option>
-            {Object.values(TrayType).map(type => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
-
-          <select
-            value={filters.material}
-            onChange={(e) => setFilters(prev => ({ ...prev, material: e.target.value }))}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Materials</option>
-            {Object.values(TrayMaterial).map(material => (
-              <option key={material} value={material}>{material}</option>
-            ))}
-          </select>
-
-          <select
-            value={filters.fillRange}
-            onChange={(e) => setFilters(prev => ({ ...prev, fillRange: e.target.value }))}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All Fill Levels</option>
-            <option value="low">Low (&lt; 30%)</option>
-            <option value="medium">Medium (30-60%)</option>
-            <option value="high">High (≥ 60%)</option>
-            <option value="overfilled">Overfilled</option>
-          </select>
-
-          <input
-            type="text"
-            placeholder="Filter by location..."
-            value={filters.location}
-            onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
-            className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-40"
-          />
-
-          {/* Clear filters */}
-          {(searchTerm || filters.trayType || filters.material || filters.fillRange || filters.location) && (
+        
+        <div className="flex items-center gap-2">
+          {onAddTray && (
             <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilters({ trayType: '', material: '', fillRange: '', location: '' });
-              }}
-              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
+              onClick={onAddTray}
+              className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              Clear All
+              Add Tray
+            </button>
+          )}
+          {onAddFromLibrary && (
+            <button
+              onClick={onAddFromLibrary}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Add from Library
             </button>
           )}
         </div>
       </div>
 
-      {/* Bulk actions bar */}
-      {selectedTrays.length > 0 && (
+      {/* Bulk Actions */}
+      {hasSelection && (
         <BulkActionsBar
-          selectedCount={selectedTrays.length}
-          entityName="tray"
+          selectedCount={selectedCount}
           onBulkEdit={onBulkEdit}
-          onBulkDelete={async () => {
-            const confirmed = await showConfirm({
-              title: 'Delete Trays',
-              message: `Are you sure you want to delete ${selectedTrays.length} selected trays? This action cannot be undone.`,
-              confirmText: 'Delete All',
-              cancelText: 'Cancel',
-              type: 'danger'
-            });
-
-            if (confirmed) {
-              try {
-                for (const trayId of selectedTrays) {
-                  onTrayDelete(trayId);
-                }
-                showSuccess(`Successfully deleted ${selectedTrays.length} trays`);
-                onSelectionChange([]);
-              } catch (error) {
-                showError(`Failed to delete trays: ${error}`);
-              }
-            }
-          }}
-          onBulkExport={() => {
-            // Export only selected trays
-            const selectedTrayData = filteredTrays.filter(tray => selectedTrays.includes(tray.id!));
+          onBulkDelete={() => {
+            const selectedIds = Object.keys(table.getState().rowSelection)
+              .filter(key => table.getState().rowSelection[key])
+              .map(key => trays[parseInt(key)]?.id)
+              .filter(id => id !== undefined) as number[];
             
-            try {
-              const headers = [
-                'Tag',
-                'Type',
-                'Width (mm)',
-                'Height (mm)',
-                'Length (m)',
-                'Material',
-                'Fill Percentage',
-                'Max Fill Percentage',
-                'From Location',
-                'To Location',
-                'Elevation (mm)',
-                'Support Spacing (mm)',
-                'Load Rating (kg/m)',
-                'Finish',
-                'Notes'
-              ];
-
-              const csvContent = [
-                headers.join(','),
-                ...selectedTrayData.map(tray => [
-                  `"${tray.tag || ''}"`,
-                  `"${tray.type || ''}"`,
-                  tray.width || '',
-                  tray.height || '',
-                  tray.length || '',
-                  `"${tray.material || ''}"`,
-                  tray.fillPercentage || '',
-                  tray.maxFillPercentage || '',
-                  `"${tray.fromLocation || ''}"`,
-                  `"${tray.toLocation || ''}"`,
-                  tray.elevation || '',
-                  tray.supportSpacing || '',
-                  tray.loadRating || '',
-                  `"${tray.finish || ''}"`,
-                  `"${tray.notes?.replace(/"/g, '""') || ''}"`
-                ].join(','))
-              ].join('\n');
-
-              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-              const link = document.createElement('a');
-              
-              if (link.download !== undefined) {
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                
-                const now = new Date();
-                const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
-                const filename = `selected-trays-${timestamp}.csv`;
-                
-                link.setAttribute('download', filename);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                showSuccess(`Exported ${selectedTrayData.length} selected trays to ${filename}`);
-              }
-            } catch (error) {
-              console.error('Export failed:', error);
-              showError(`Export failed: ${error}`);
-            }
-          }}
-          onClearSelection={() => {
-            onSelectionChange([]);
+            selectedIds.forEach(id => onTrayDelete(id));
           }}
         />
       )}
 
-      {/* Results summary */}
-      <div className="px-4 py-2 text-sm text-gray-600 border-b border-gray-200">
-        Showing {filteredTrays.length} of {trays.length} trays
-        {selectedTrays.length > 0 && ` • ${selectedTrays.length} selected`}
-      </div>
+      {/* Filters */}
+      <FilterBar
+        globalFilter={globalFilter}
+        onGlobalFilterChange={setGlobalFilter}
+        columnFilters={columnFilters}
+        onColumnFiltersChange={setColumnFilters}
+        columns={table.getAllColumns().map(col => ({
+          id: col.id,
+          label: typeof col.columnDef.header === 'string' ? col.columnDef.header : col.id
+        }))}
+      />
 
-      {/* Grid */}
-      <div className="flex-1 ag-theme-alpine">
-        <AgGridReact
-          rowData={filteredTrays}
-          columnDefs={columnDefinitions}
-          onGridReady={onGridReady}
-          onCellValueChanged={handleRowValueChanged}
-          onSelectionChanged={onSelectionChanged}
-          rowSelection="multiple"
-          suppressRowClickSelection={true}
-          defaultColDef={{
-            sortable: true,
-            filter: true,
-            resizable: true,
-            editable: false
-          }}
-          getRowId={(params) => params.data.id?.toString() || params.data.tag || Math.random().toString()}
-        />
+      {/* Table */}
+      <div className="flex-1 overflow-hidden">
+        <div 
+          ref={tableRef}
+          className="h-full overflow-auto"
+          // onContextMenu={(e) => handleContextMenu(e)}
+        >
+          <table className="tanstack-table">
+            <thead>
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map(header => (
+                    <th
+                      key={header.id}
+                      style={{ width: header.getSize() }}
+                      className={header.column.getCanSort() ? 'sortable' : ''}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <div className="flex items-center gap-2">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {header.column.getIsSorted() && (
+                          <ChevronDown 
+                            className={`w-4 h-4 transition-transform ${
+                              header.column.getIsSorted() === 'desc' ? 'rotate-180' : ''
+                            }`}
+                          />
+                        )}
+                      </div>
+                      {header.column.getCanResize() && (
+                        <div
+                          className="resize-handle"
+                          onMouseDown={header.getResizeHandler()}
+                        />
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {table.getRowModel().rows.map(row => (
+                <tr
+                  key={row.id}
+                  className={`
+                    ${row.getIsSelected() ? 'selected' : ''}
+                    ${selectedRows.has(parseInt(row.id)) ? 'table-row-selected' : ''}
+                    ${isRangeSelecting && selectedRange && 
+                      parseInt(row.id) >= Math.min(selectedRange.start.row, selectedRange.end.row) &&
+                      parseInt(row.id) <= Math.max(selectedRange.start.row, selectedRange.end.row)
+                      ? 'table-row-range' : ''}
+                  `}
+                  onClick={(e) => handleRowClick(e, parseInt(row.id))}
+                  onMouseEnter={() => handleRowMouseEnter(parseInt(row.id))}
+                  // onContextMenu={(e) => handleContextMenu(e, parseInt(row.id)))
+                >
+                  {row.getVisibleCells().map(cell => (
+                    <td key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          
+          {table.getRowModel().rows.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+              <Package className="w-12 h-12 mb-4 text-gray-400" />
+              <h3 className="text-lg font-medium mb-2">No Cable Trays</h3>
+              <p className="text-sm text-center mb-4">
+                Get started by adding your first cable tray.
+              </p>
+              {onAddTray && (
+                <button
+                  onClick={onAddTray}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                >
+                  Add Tray
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

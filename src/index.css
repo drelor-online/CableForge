@@ -1,5 +1,7 @@
 /* Import icon styles */
 @import './styles/icons.css';
+/* Import TanStack Table styles */
+@import './styles/tanstack-table.css';
 
 /* CableForge Design System CSS Variables */
 :root {
