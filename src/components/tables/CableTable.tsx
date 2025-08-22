@@ -21,6 +21,7 @@ import DuplicateCablesModal from '../modals/DuplicateCablesModal';
 import ColumnManagerModal from '../modals/ColumnManagerModal';
 import { useUI } from '../../contexts/UIContext';
 import { Edit2, Trash2, ChevronDown, Calculator, TrendingUp, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { fillRange, fillSeries, clearContents, handleKeyboardShortcuts } from '../../utils/ag-grid-excel';
 
 interface CableTableProps {
   cables: Cable[];
@@ -934,6 +935,17 @@ const CableTable: React.FC<CableTableProps> = ({
     enableRowGroup: false,
     enablePivot: false,
     enableValue: false,
+    // Excel-like features - cell text selection is enabled by default in AG-Grid
+    suppressKeyboardEvent: (params) => {
+      // Allow Ctrl+C, Ctrl+V, Ctrl+X, Delete keys
+      const { event } = params;
+      if (event.key === 'c' && event.ctrlKey) return false; // Allow copy
+      if (event.key === 'v' && event.ctrlKey) return false; // Allow paste
+      if (event.key === 'x' && event.ctrlKey) return false; // Allow cut
+      if (event.key === 'Delete') return false; // Allow delete
+      if (event.key === 'F2') return false; // Allow edit mode
+      return false; // Allow all other keys
+    }
   };
 
   return (
@@ -1035,8 +1047,80 @@ const CableTable: React.FC<CableTableProps> = ({
             copySelectedRows: true,
             isRowSelectable: (params) => params.data.id !== -1 // Don't allow selection of empty row
           }}
-          // Excel-like features (Community version limited)
-          enableCellTextSelection={true}
+          // Excel-like features
+          enableRangeSelection={true}
+          enableRangeHandle={true}
+          fillHandleDirection="xy"
+          suppressCopyRowsToClipboard={false}
+          suppressCopySingleCellRanges={false}
+          copyHeadersToClipboard={false}
+          clipboardDelimiter="\t"
+          // Context menu for Excel-like operations
+          getContextMenuItems={(params) => {
+            const ranges = params.api.getCellRanges() || [];
+            const hasSelection = ranges.length > 0;
+            
+            const result: any[] = [
+              'copy',
+              'paste',
+              'separator',
+              {
+                name: 'Fill Down',
+                disabled: !hasSelection,
+                action: () => {
+                  if (hasSelection) {
+                    fillRange({
+                      api: params.api,
+                      direction: 'down',
+                      ranges
+                    });
+                  }
+                },
+                icon: '<span style="font-size: 12px;">⬇</span>'
+              },
+              {
+                name: 'Fill Right',
+                disabled: !hasSelection,
+                action: () => {
+                  if (hasSelection) {
+                    fillRange({
+                      api: params.api,
+                      direction: 'right',
+                      ranges
+                    });
+                  }
+                },
+                icon: '<span style="font-size: 12px;">➡</span>'
+              },
+              {
+                name: 'Fill Series',
+                disabled: !hasSelection,
+                action: () => {
+                  if (hasSelection) {
+                    fillSeries({
+                      api: params.api,
+                      direction: 'down',
+                      ranges
+                    });
+                  }
+                },
+                icon: '<span style="font-size: 12px;">📈</span>'
+              },
+              {
+                name: 'Clear Contents',
+                disabled: !hasSelection,
+                action: () => {
+                  if (hasSelection) {
+                    clearContents({ api: params.api, ranges });
+                  }
+                },
+                icon: '<span style="font-size: 12px;">🗑</span>'
+              },
+              'separator',
+              'export'
+            ];
+            return result;
+          }}
           // Cell navigation
           suppressMovableColumns={false}
           ensureDomOrder={true}

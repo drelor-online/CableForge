@@ -3,7 +3,7 @@ import { ColumnDefinition } from '../../services/column-service';
 import { FilterCondition, filterService } from '../../services/filter-service';
 import { FilterConfigService } from '../../config/filter-types';
 import { Filter, X, ChevronDown, ChevronUp, Save, FolderOpen } from 'lucide-react';
-import { colors, theme } from '../../theme';
+import { colors, theme, spacing, typography } from '../../theme';
 import { Icon } from '../common/Icon';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import FilterDropdown from './FilterDropdown';
@@ -114,32 +114,51 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
     <div className={className} style={{ borderBottom: `1px solid ${colors.gray[200]}` }}>
       {/* Compact Header Bar */}
       <div 
-        className="flex items-center justify-between px-4 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: `${spacing[2]} ${spacing[4]}`,
+          backgroundColor: colors.gray[50],
+          cursor: 'pointer',
+          minHeight: theme.heights.tableRow,
+          transition: 'background-color 0.2s ease'
+        }}
         onClick={() => setIsExpanded(!isExpanded)}
-        style={{ minHeight: theme.heights.tableRow }}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.gray[100]}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = colors.gray[50]}
       >
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: spacing[4] }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: spacing[2] }}>
             <Icon icon={Filter} size="sm" color={colors.gray[600]} />
-            <span className="text-sm font-medium text-gray-700">
+            <span style={{
+              fontSize: typography.fontSize.sm,
+              fontWeight: typography.fontWeight.medium,
+              color: colors.gray[700]
+            }}>
               {hasActiveFilters ? `${filteredCount} of ${data.length} rows` : `All ${data.length} rows`}
             </span>
           </div>
           
           {hasActiveFilters && (
-            <div className="flex items-center gap-1">
+            <div style={{ display: 'flex', alignItems: 'center', gap: spacing[1] }}>
               {activeFilters.slice(0, 3).map(filter => {
                 const column = filterableColumns.find(col => col.field === filter.field);
                 return (
                   <div
                     key={filter.field}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs"
-                    style={{ 
-                      backgroundColor: colors.blue[100], 
-                      color: colors.blue[800] 
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: spacing[1],
+                      padding: `${spacing[1]} ${spacing[2]}`,
+                      borderRadius: theme.borderRadius.sm,
+                      backgroundColor: colors.blue[100],
+                      color: colors.blue[800],
+                      fontSize: typography.fontSize.xs
                     }}
                   >
-                    <span className="font-medium">
+                    <span style={{ fontWeight: typography.fontWeight.medium }}>
                       {column?.headerName || filter.field}
                     </span>
                     <button
@@ -147,8 +166,18 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
                         e.stopPropagation();
                         handleFilterChange(filter.field, null);
                       }}
-                      className="ml-1 hover:bg-blue-200 rounded"
-                      style={{ color: colors.blue[600] }}
+                      style={{
+                        marginLeft: spacing[1],
+                        padding: spacing[1],
+                        borderRadius: theme.borderRadius.sm,
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: colors.blue[600],
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.blue[200]}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                       <Icon icon={X} size="xs" />
                     </button>
@@ -156,7 +185,10 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
                 );
               })}
               {activeFilters.length > 3 && (
-                <span className="text-xs text-gray-500">
+                <span style={{
+                  fontSize: typography.fontSize.xs,
+                  color: colors.gray[500]
+                }}>
                   +{activeFilters.length - 3} more
                 </span>
               )}
@@ -164,28 +196,51 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: spacing[2] }}>
           {hasActiveFilters && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleClearAllFilters();
               }}
-              className="text-xs px-2 py-1 rounded hover:bg-red-50"
-              style={{ color: colors.red[600] }}
+              style={{
+                fontSize: typography.fontSize.xs,
+                padding: `${spacing[1]} ${spacing[2]}`,
+                borderRadius: theme.borderRadius.sm,
+                backgroundColor: 'transparent',
+                border: 'none',
+                color: colors.red[600],
+                cursor: 'pointer',
+                transition: 'background-color 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.red[50]}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               Clear All
             </button>
           )}
           
-          <div className="relative">
+          <div style={{ position: 'relative' }}>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setShowPresetMenu(!showPresetMenu);
               }}
-              className="text-xs px-2 py-1 rounded hover:bg-gray-200 flex items-center gap-1"
-              style={{ color: colors.gray[600] }}
+              style={{
+                fontSize: typography.fontSize.xs,
+                padding: `${spacing[1]} ${spacing[2]}`,
+                borderRadius: theme.borderRadius.sm,
+                backgroundColor: 'transparent',
+                border: 'none',
+                color: colors.gray[600],
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: spacing[1],
+                transition: 'background-color 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.gray[200]}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               <Icon icon={FolderOpen} size="xs" />
               Presets
@@ -193,11 +248,26 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
             
             {showPresetMenu && (
               <div 
-                className="absolute right-0 top-full mt-1 bg-white rounded-md shadow-lg z-50 min-w-48"
-                style={{ border: `1px solid ${colors.gray[200]}` }}
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '100%',
+                  marginTop: spacing[1],
+                  backgroundColor: colors.background.primary,
+                  borderRadius: theme.borderRadius.md,
+                  boxShadow: theme.shadows.lg,
+                  zIndex: 50,
+                  minWidth: '192px',
+                  border: `1px solid ${colors.gray[200]}`
+                }}
               >
-                <div className="p-2">
-                  <div className="text-xs font-medium text-gray-700 mb-2">Filter Presets</div>
+                <div style={{ padding: spacing[2] }}>
+                  <div style={{
+                    fontSize: typography.fontSize.xs,
+                    fontWeight: typography.fontWeight.medium,
+                    color: colors.gray[700],
+                    marginBottom: spacing[2]
+                  }}>Filter Presets</div>
                   
                   {hasActiveFilters && (
                     <button
@@ -206,8 +276,23 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
                         setShowSaveDialog(true);
                         setShowPresetMenu(false);
                       }}
-                      className="w-full text-left px-2 py-1 text-xs rounded hover:bg-gray-50 flex items-center gap-1"
-                      style={{ color: colors.green[600] }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: `${spacing[1]} ${spacing[2]}`,
+                        fontSize: typography.fontSize.xs,
+                        borderRadius: theme.borderRadius.sm,
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: colors.green[600],
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: spacing[1],
+                        transition: 'background-color 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.gray[50]}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                       <Icon icon={Save} size="xs" />
                       Save Current Filters
@@ -216,20 +301,57 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
                   
                   {filterPresets.length > 0 && (
                     <>
-                      <div className="border-t my-2" style={{ borderColor: colors.gray[200] }}></div>
+                      <div style={{
+                        borderTop: `1px solid ${colors.gray[200]}`,
+                        margin: `${spacing[2]} 0`
+                      }}></div>
                       {filterPresets.map(preset => (
-                        <div key={preset.id} className="flex items-center justify-between group">
+                        <div key={preset.id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}>
                           <button
                             onClick={() => handleLoadPreset(preset)}
-                            className="flex-1 text-left px-2 py-1 text-xs rounded hover:bg-gray-50"
+                            style={{
+                              flex: 1,
+                              textAlign: 'left',
+                              padding: `${spacing[1]} ${spacing[2]}`,
+                              fontSize: typography.fontSize.xs,
+                              borderRadius: theme.borderRadius.sm,
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'background-color 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.gray[50]}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                           >
-                            <div className="font-medium">{preset.name}</div>
-                            <div className="text-gray-500">{preset.filters.length} filters</div>
+                            <div style={{ fontWeight: typography.fontWeight.medium }}>{preset.name}</div>
+                            <div style={{ color: colors.gray[500] }}>{preset.filters.length} filters</div>
                           </button>
                           <button
                             onClick={() => handleDeletePreset(preset.id)}
-                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded"
-                            style={{ color: colors.red[600] }}
+                            style={{
+                              opacity: 0,
+                              padding: spacing[1],
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              borderRadius: theme.borderRadius.sm,
+                              color: colors.red[600],
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = colors.red[50];
+                              e.currentTarget.style.opacity = '1';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                              e.currentTarget.style.opacity = '0';
+                            }}
+                            onFocus={(e) => e.currentTarget.style.opacity = '1'}
+                            onBlur={(e) => e.currentTarget.style.opacity = '0'}
                           >
                             <Icon icon={X} size="xs" />
                           </button>
@@ -239,7 +361,12 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
                   )}
                   
                   {filterPresets.length === 0 && !hasActiveFilters && (
-                    <div className="text-xs text-gray-500 text-center py-2">
+                    <div style={{
+                      fontSize: typography.fontSize.xs,
+                      color: colors.gray[500],
+                      textAlign: 'center',
+                      padding: spacing[2]
+                    }}>
                       No presets saved yet
                     </div>
                   )}
@@ -284,16 +411,29 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
 
       {/* Expanded Filter Panel */}
       {isExpanded && (
-        <div className="bg-white border-t" style={{ borderColor: colors.gray[200] }}>
-          <div className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div style={{
+          backgroundColor: colors.background.primary,
+          borderTop: `1px solid ${colors.gray[200]}`
+        }}>
+          <div style={{ padding: spacing[6] }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: spacing[6]
+            }}>
               {filterableColumns.map(column => {
                 const fieldType = getFieldType(column.field);
                 const currentFilter = getCurrentFilter(column.field);
                 
                 return (
                   <div key={column.field}>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                    <label style={{
+                      display: 'block',
+                      fontSize: typography.fontSize.xs,
+                      fontWeight: typography.fontWeight.medium,
+                      color: colors.gray[700],
+                      marginBottom: spacing[1]
+                    }}>
                       {column.headerName}
                     </label>
                     <FilterDropdown
@@ -315,39 +455,105 @@ const CompactFilterBar: React.FC<CompactFilterBarProps> = ({
 
       {/* Save Preset Dialog */}
       {showSaveDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 50
+        }}>
           <div 
-            className="bg-white rounded-lg shadow-xl p-4 w-80"
-            style={{ border: `1px solid ${colors.gray[200]}` }}
+            style={{
+              backgroundColor: colors.background.primary,
+              borderRadius: theme.borderRadius.lg,
+              boxShadow: theme.shadows.xl,
+              padding: spacing[6],
+              width: '320px',
+              border: `1px solid ${colors.gray[200]}`
+            }}
           >
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Save Filter Preset</h3>
+            <h3 style={{
+              fontSize: typography.fontSize.sm,
+              fontWeight: typography.fontWeight.medium,
+              color: colors.gray[900],
+              marginBottom: spacing[4]
+            }}>Save Filter Preset</h3>
             <input
               type="text"
               value={presetName}
               onChange={(e) => setPresetName(e.target.value)}
               placeholder="Enter preset name"
-              className="w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-1"
-              style={{ 
-                borderColor: colors.gray[300]
+              style={{
+                width: '100%',
+                padding: `${spacing[2]} ${spacing[4]}`,
+                fontSize: typography.fontSize.sm,
+                border: `1px solid ${colors.gray[300]}`,
+                borderRadius: theme.borderRadius.md,
+                outline: 'none',
+                transition: 'border-color 0.2s ease'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = colors.blue[500];
+                e.target.style.boxShadow = `0 0 0 1px ${colors.blue[500]}`;
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = colors.gray[300];
+                e.target.style.boxShadow = 'none';
               }}
               autoFocus
             />
-            <div className="flex justify-end gap-2 mt-4">
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: spacing[2],
+              marginTop: spacing[6]
+            }}>
               <button
                 onClick={() => {
                   setShowSaveDialog(false);
                   setPresetName('');
                 }}
-                className="px-3 py-1 text-xs text-gray-600 border rounded hover:bg-gray-50"
-                style={{ borderColor: colors.gray[300] }}
+                style={{
+                  padding: `${spacing[1]} ${spacing[4]}`,
+                  fontSize: typography.fontSize.xs,
+                  color: colors.gray[600],
+                  border: `1px solid ${colors.gray[300]}`,
+                  borderRadius: theme.borderRadius.sm,
+                  backgroundColor: 'transparent',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = colors.gray[50]}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSavePreset}
                 disabled={!presetName.trim()}
-                className="px-3 py-1 text-xs text-white rounded hover:opacity-90 disabled:opacity-50"
-                style={{ backgroundColor: colors.blue[600] }}
+                style={{
+                  padding: `${spacing[1]} ${spacing[4]}`,
+                  fontSize: typography.fontSize.xs,
+                  color: colors.text.inverse,
+                  backgroundColor: colors.blue[600],
+                  border: 'none',
+                  borderRadius: theme.borderRadius.sm,
+                  cursor: 'pointer',
+                  opacity: presetName.trim() ? 1 : 0.5,
+                  transition: 'opacity 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  if (presetName.trim()) {
+                    e.currentTarget.style.opacity = '0.9';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (presetName.trim()) {
+                    e.currentTarget.style.opacity = '1';
+                  }
+                }}
               >
                 Save
               </button>

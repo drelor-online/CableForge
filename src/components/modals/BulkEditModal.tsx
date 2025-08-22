@@ -2,7 +2,11 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Cable, CableFunction, SegregationClass, Tray, Conduit } from '../../types';
 import { useUI } from '../../contexts/UIContext';
 import { TauriDatabaseService } from '../../services/tauri-database';
-import { colors, spacing, typography } from '../../theme';
+import { theme, colors, spacing, typography } from '../../theme';
+import Modal, { ModalFooter } from '../ui/Modal';
+import Input from '../ui/Input';
+import Select from '../ui/Select';
+import Button from '../ui/Button';
 
 interface BulkEditModalProps {
   isOpen: boolean;
